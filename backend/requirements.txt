@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+motor
+passlib[bcrypt]
+python-multipart
+mediapipe
+opencv-python
+numpy
+email-validator
+passlib[bcrypt]
+bcrypt==4.0.1
