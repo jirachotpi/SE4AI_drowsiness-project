@@ -7,7 +7,7 @@ const CONFIG = {
   THRESH_LONG_BLINK: 0.4,    // ง่วง: ตาปิดเกิน 0.4 วิ
   THRESH_MICROSLEEP: 1.0,    // อันตราย: ตาปิดเกิน 1.0 วิ (วูบ)
   THRESH_DEEP_SLEEP: 2.0,    // วิกฤต: ตาปิดเกิน 2.0 วิ
-  THRESH_STARING: 12.0,      // เหม่อลอย: ตาค้างเกิน 12 วิ
+  THRESH_STARING: 10.0,      // เหม่อลอย: ตาค้างเกิน 12 วิ
   THRESH_FREQ_COUNT: 5,      // วูบบ่อย: เกิน 2 ครั้งใน 1 นาที
   COOLDOWN_MS: 60000         // เวลาในการรีเซ็ตค่าวูบสะสม (1 นาที)
 };
