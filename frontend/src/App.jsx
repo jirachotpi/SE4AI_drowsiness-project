@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import Register from './Register'
 import Login from './Login'
+import AdminDashboard from './AdminDashboard' // <--- เพิ่มตัวนี้
 
 function App() {
   const [status, setStatus] = useState("กำลังตรวจสอบ...")
   const [currentView, setCurrentView] = useState("login")
-  
-  // 🌟 เพิ่มตัวแปรเก็บข้อมูลคนล็อกอิน
   const [user, setUser] = useState(null); 
 
   useEffect(() => {
@@ -16,26 +15,26 @@ function App() {
       .catch(err => setStatus("❌ เชื่อมต่อ Backend ไม่ได้"))
   }, [])
 
-  // ฟังก์ชัน Logout (แค่ล้างค่า user ออก)
   const handleLogout = () => {
     setUser(null);
     setCurrentView("login");
   }
 
-  return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
-      <h1>🚗 SE4AI Drowsiness Project</h1>
-      <p style={{ fontSize: '12px', color: '#888' }}>Server: {status}</p>
-      <hr />
-
-      {/* 👇 เงื่อนไข: ถ้ามี User (ล็อกอินแล้ว) ให้โชว์หน้า Dashboard */}
-      {user ? (
-        <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px" }}>
-          <h2>🎉 ยินดีต้อนรับ, {user.username}!</h2>
-          <p>สถานะของคุณคือ: <strong>{user.role}</strong></p>
+  // --- 👇 ส่วนที่ทำหน้าที่ "แยก Role" ---
+  const renderLoggedInView = () => {
+    if (user.role === 'admin') {
+      return <AdminDashboard user={user} onLogout={handleLogout} />;
+    } else {
+      // หน้าจอสำหรับ User (คนขับรถ)
+      return (
+        <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px", backgroundColor: "#e8f5e9" }}>
+          <h2 style={{ color: "green" }}>🚗 Driver Dashboard</h2>
+          <p>ยินดีต้อนรับ, {user.username}!</p>
+          <p>สถานะ: <strong>ผู้ขับขี่ทั่วไป</strong></p>
           
-          <div style={{ marginTop: "20px" }}>
-             {/* ตรงนี้เดี๋ยวเราจะใส่ปุ่ม AI Detection ใน Backlog ถัดไป */}
+          <div style={{ marginTop: "20px", padding: "30px", border: "1px dashed green" }}>
+             <h3>[พื้นที่สำหรับกล้อง Webcam]</h3>
+             <p>(จะมาใน Backlog-05)</p>
              <button style={{ fontSize: "20px", padding: "15px", background: "orange", border: "none", cursor: "pointer" }}>
                 📷 เริ่มตรวจจับความง่วง
              </button>
@@ -45,8 +44,20 @@ function App() {
             ออกจากระบบ
           </button>
         </div>
+      );
+    }
+  }
+  // ------------------------------------
+
+  return (
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
+      <h1>SE4AI Project</h1>
+      <p style={{ fontSize: '12px', color: '#888' }}>Server: {status}</p>
+      <hr />
+
+      {user ? (
+        renderLoggedInView() // ถ้าล็อกอินแล้ว ให้ฟังก์ชันเลือกหน้าจอให้
       ) : (
-        // 👇 ถ้ายังไม่ล็อกอิน ให้โชว์หน้า Login/Register เหมือนเดิม
         <div>
           <div style={{ marginBottom: "20px" }}>
             <button onClick={() => setCurrentView("login")} style={{ marginRight: "10px", padding: "10px", fontWeight: currentView === "login" ? "bold" : "normal" }}>เข้าสู่ระบบ</button>
