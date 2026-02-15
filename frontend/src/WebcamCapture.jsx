@@ -1,42 +1,149 @@
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
 
-// --- CONFIGURATION (ค่าที่ปรับจูนแล้ว) ---
+// ==========================================
+// 1. ส่วนตั้งค่าระบบ (CONFIGURATION)
+// ==========================================
 const CONFIG = {
-  INTERVAL_MS: 200,          // ตรวจจับทุกๆ 0.2 วินาที (5 FPS)
-  THRESH_LONG_BLINK: 0.4,    // ง่วง: ตาปิดเกิน 0.4 วิ
-  THRESH_MICROSLEEP: 1.0,    // อันตราย: ตาปิดเกิน 1.0 วิ (วูบ)
-  THRESH_DEEP_SLEEP: 2.0,    // วิกฤต: ตาปิดเกิน 2.0 วิ
-  THRESH_STARING: 10.0,      // เหม่อลอย: ตาค้างเกิน 12 วิ
-  THRESH_FREQ_COUNT: 5,      // วูบบ่อย: เกิน 2 ครั้งใน 1 นาที
-  COOLDOWN_MS: 60000         // เวลาในการรีเซ็ตค่าวูบสะสม (1 นาที)
+  INTERVAL_MS: 200,          // ความถี่ในการเช็ค (ms)
+  THRESH_LONG_BLINK: 0.4,    // สีเหลือง: ตาปิดเกิน 0.4 วิ
+  THRESH_MICROSLEEP: 1.0,    // สีส้ม: ตาปิดเกิน 1.0 วิ (วูบ)
+  THRESH_DEEP_SLEEP: 2.0,    // สีแดง: ตาปิดเกิน 2.0 วิ (หลับใน)
+  THRESH_STARING: 8.0,      // สีแดง: เหม่อลอย/ตาค้างเกิน 8 วิ
+  THRESH_FREQ_COUNT: 5,      // สีแดง: วูบครบ 5 ครั้ง
+  COOLDOWN_MS: 60000,        // เวลา reset นับจำนวนวูบ (1 นาที)
+  RECOVERY_TIME: 3.0,        // เวลาที่ต้องลืมตาต่อเนื่องเพื่อให้หายง่วง (3 วิ)
+  WARNING_DURATION: 1000,    // ความยาวเสียงเตือนสีส้ม (ปรับตามความยาวไฟล์คุณ)
+  
+  // --- เส้นทางไฟล์เสียงในโฟลเดอร์ public ---
+  PATH_WARNING_SOUND: "/Orange_alarm.mp3", 
+  PATH_DANGER_SOUND: "/Red_alarm.mp3"
 };
 
 function WebcamCapture() {
+  // ==========================================
+  // 2. ตัวแปรและ State (VARIABLES)
+  // ==========================================
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   
-  // UI State
+  // UI State (ข้อความและสีบนหน้าจอ)
   const [statusText, setStatusText] = useState("รอเริ่มระบบ...");
-  const [alertColor, setAlertColor] = useState("gray"); // gray, green, yellow, orange, red
+  const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
-  // Logic State (ใช้ useRef เพื่อไม่ให้ Re-render บ่อยเกินไป)
+  // Audio Refs (เชื่อมกับ HTML Audio Tag เพื่อลด Latency/ดีเลย์)
+  const warningAudioRef = useRef(null); 
+  const dangerAudioRef = useRef(null); 
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Logic State (ตัวแปรจำค่าระบบ ไม่ Reset เมื่อ render)
   const logicState = useRef({
-    consecutiveClosedFrames: 0, // จำนวนเฟรมที่ตาปิดต่อเนื่อง
-    drowsyEventCount: 0,        // จำนวนครั้งที่วูบหลับ
+    consecutiveClosedFrames: 0, // ปิดตาต่อเนื่อง (frame)
+    consecutiveOpenFrames: 0,   // ลืมตาต่อเนื่อง (frame)
+    drowsyEventCount: 0,        // นับจำนวนครั้งที่วูบ
     lastDrowsyEventTime: Date.now(),
-    lastBlinkTime: Date.now()   // เวลาล่าสุดที่กระพริบตา (ใช้จับ Staring)
+    lastBlinkTime: Date.now(),
+    isPlayingDanger: false,     // สถานะกำลังเล่นเสียงแดง
+    isPlayingWarning: false     // สถานะกำลังเล่นเสียงส้ม
   });
 
-  // ฟังก์ชันหลัก: จับภาพ -> ส่ง AI -> วิเคราะห์
+  // ==========================================
+  // 3. ฟังก์ชันรีเซ็ตระบบ (RESET)
+  // ==========================================
+  const resetSystem = () => {
+    // หยุดเสียงทั้งหมด
+    if (warningAudioRef.current) {
+        warningAudioRef.current.pause();
+        warningAudioRef.current.currentTime = 0;
+    }
+    if (dangerAudioRef.current) {
+        dangerAudioRef.current.pause();
+        dangerAudioRef.current.currentTime = 0;
+    }
+
+    // ล้างค่าตัวแปรทั้งหมด
+    logicState.current = {
+      consecutiveClosedFrames: 0,
+      consecutiveOpenFrames: 0,
+      drowsyEventCount: 0,
+      lastDrowsyEventTime: Date.now(),
+      lastBlinkTime: Date.now(),
+      isPlayingDanger: false,
+      isPlayingWarning: false
+    };
+    
+    // อัปเดตหน้าจอ
+    setStatusText("ระบบพร้อมทำงาน...");
+    setAlertColor("green");
+    setDebugInfo("ค่าทั้งหมดถูกรีเซตแล้ว");
+  };
+
+  // ==========================================
+  // 4. ฟังก์ชันจัดการเสียง (SOUND MANAGER)
+  // ==========================================
+  const handleSound = (type) => {
+    if (isMuted) return; 
+
+    // กรณีสั่งหยุดเสียง (Stop)
+    if (type === "stop") {
+        if (dangerAudioRef.current) {
+            dangerAudioRef.current.pause();
+            dangerAudioRef.current.currentTime = 0;
+        }
+        if (warningAudioRef.current) {
+            warningAudioRef.current.pause();
+            warningAudioRef.current.currentTime = 0;
+        }
+        logicState.current.isPlayingDanger = false;
+        logicState.current.isPlayingWarning = false;
+        return;
+    }
+
+    // กรณีเสียงอันตรายสีแดง (Danger) -> ต้องดังทันทีและหยุดเสียงส้ม
+    if (type === "danger") {
+        // --- ส่วนที่เพิ่ม: สั่งหยุดเสียงสีส้มทันทีถ้าแดงจะดัง ---
+        if (warningAudioRef.current) {
+            warningAudioRef.current.pause();
+            warningAudioRef.current.currentTime = 0;
+            logicState.current.isPlayingWarning = false;
+        }
+
+        if (!logicState.current.isPlayingDanger && dangerAudioRef.current) {
+            logicState.current.isPlayingDanger = true;
+            dangerAudioRef.current.currentTime = 0;
+            dangerAudioRef.current.play().catch((e) => console.log("Audio play error:", e));
+        }
+    }
+
+    // กรณีเสียงเตือนสีส้ม (Warning)
+    if (type === "warning") {
+        // เล่นเฉพาะเมื่อเสียงแดงไม่ดังอยู่เท่านั้น
+        if (!logicState.current.isPlayingWarning && !logicState.current.isPlayingDanger && warningAudioRef.current) {
+            logicState.current.isPlayingWarning = true;
+            warningAudioRef.current.currentTime = 0;
+            warningAudioRef.current.play().catch((e) => console.log("Audio play error:", e));
+
+            // หยุดเสียงส้มเมื่อครบเวลาที่กำหนด (ถ้าไฟล์คุณยาวเกินไป)
+            setTimeout(() => {
+                if (!logicState.current.isPlayingDanger) { // ถ้าแดงยังไม่มาค่อยหยุด
+                    warningAudioRef.current.pause();
+                    warningAudioRef.current.currentTime = 0;
+                }
+                logicState.current.isPlayingWarning = false; 
+            }, CONFIG.WARNING_DURATION);
+        }
+    }
+  };
+
+  // ==========================================
+  // 5. ฟังก์ชันหลัก: จับภาพและวิเคราะห์
+  // ==========================================
   const captureAndDetect = async () => {
     if (!videoRef.current || !isStreaming) return;
-
-    const video = videoRef.current;
     
-    // สร้าง Canvas ชั่วคราวเพื่อดึงภาพ
+    const video = videoRef.current;
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
@@ -50,10 +157,7 @@ function WebcamCapture() {
         const res = await axios.post("http://127.0.0.1:8000/api/detect", formData);
         const data = res.data;
         
-        // 1. วาดกรอบหน้า UI
         drawOverlay(data.face_box, data.ear);
-        
-        // 2. วิเคราะห์พฤติกรรม (Core Logic)
         analyzeFatigue(data);
 
       } catch (err) {
@@ -62,177 +166,186 @@ function WebcamCapture() {
     }, "image/jpeg");
   };
 
-  // ฟังก์ชันวิเคราะห์ความล้า (Brain)
+  // ==========================================
+  // 6. สมองของระบบ: วิเคราะห์ความง่วง (LOGIC)
+  // ==========================================
   const analyzeFatigue = (data) => {
     const NOW = Date.now();
     const state = logicState.current;
 
-    // A. ถ้าไม่เจอหน้า (No Face)
     if (data.status === "no_face") {
         setStatusText("ไม่พบใบหน้า");
         setAlertColor("gray");
         state.consecutiveClosedFrames = 0;
+        state.consecutiveOpenFrames = 0;
+        handleSound("stop");
         return;
     }
 
-    // B. Reset ตัวนับความถี่ (Cooldown 1 นาที)
     if (NOW - state.lastDrowsyEventTime > CONFIG.COOLDOWN_MS) {
         state.drowsyEventCount = 0;
     }
 
-    // C. ตรวจจับสถานะตา (Eye Logic)
     if (data.is_eye_closed) {
-        // [ตาปิด]
         state.consecutiveClosedFrames += 1;
-        
-        // รีเซ็ตเวลาตาค้าง (เพราะหลับตาแล้ว แปลว่าไม่ได้จ้อง)
+        state.consecutiveOpenFrames = 0;
         state.lastBlinkTime = NOW; 
     } else {
-        // [ตาเปิด]
-        // เช็คว่าก่อนหน้านี้หลับตานานแค่ไหน?
-        const closedDuration = state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000);
+        state.consecutiveOpenFrames += 1;
+        
+        const openDuration = state.consecutiveOpenFrames * (CONFIG.INTERVAL_MS / 1000);
+        if (openDuration >= CONFIG.RECOVERY_TIME) {
+            state.drowsyEventCount = 0; 
+        }
 
-        // ถ้ารอบที่แล้วหลับตานานกว่า Threshold (วูบ) ให้นับสถิติ
+        const closedDuration = state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000);
         if (closedDuration >= CONFIG.THRESH_MICROSLEEP) {
-             state.drowsyEventCount += 1;
+             state.drowsyEventCount += 1; 
              state.lastDrowsyEventTime = NOW;
         }
-        
-        // รีเซ็ตตัวนับตาปิด
         state.consecutiveClosedFrames = 0;
     }
 
-    // D. ประมวลผลเพื่อตัดสินใจ (Decision Making)
     const currentClosedSeconds = (state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
 
-    // --- DECISION TREE ---
-    if (currentClosedSeconds >= CONFIG.THRESH_DEEP_SLEEP) {
+    // 🔴 โซนสีแดง (เช็คเงื่อนไขแดงก่อนเพื่อความเร็ว)
+    if (currentClosedSeconds >= CONFIG.THRESH_DEEP_SLEEP || 
+        stareSeconds >= CONFIG.THRESH_STARING || 
+        state.drowsyEventCount >= CONFIG.THRESH_FREQ_COUNT) {
+        
         setAlertColor("red");
-        setStatusText(`🚨 อันตราย! หลับใน (${currentClosedSeconds.toFixed(1)}s)`);
-        // TODO: Play Sound Here
+        setStatusText("🚨 อันตราย! พักเดี๋ยวนี้");
+        handleSound("danger"); 
     } 
+    // 🟠 โซนสีส้ม
     else if (currentClosedSeconds >= CONFIG.THRESH_MICROSLEEP) {
         setAlertColor("orange");
-        setStatusText(`⚠️ วูบหลับ! (${currentClosedSeconds.toFixed(1)}s)`);
+        setStatusText(`⚠️ ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
+        handleSound("warning"); 
     }
+    // 🟡 โซนสีเหลือง
     else if (currentClosedSeconds >= CONFIG.THRESH_LONG_BLINK) {
         setAlertColor("yellow");
         setStatusText(`ง่วงนอน... (${currentClosedSeconds.toFixed(1)}s)`);
+        handleSound("stop"); 
     }
-    else if (stareSeconds >= CONFIG.THRESH_STARING) {
-        setAlertColor("orange");
-        setStatusText(`⚠️ เหม่อลอย / ตาค้าง (${stareSeconds.toFixed(1)}s)`);
-    }
-    else if (state.drowsyEventCount >= CONFIG.THRESH_FREQ_COUNT) {
-        setAlertColor("red");
-        setStatusText(`🚨 พักเดี๋ยวนี้! (วูบ ${state.drowsyEventCount} ครั้ง)`);
-    }
+    // 🟢 โซนสีเขียว
     else {
         setAlertColor("green");
         setStatusText("ปกติ (ขับขี่ปลอดภัย)");
+        handleSound("stop"); 
     }
 
-    // Debug Info
-    setDebugInfo(`EAR: ${data.ear} | Stare: ${stareSeconds.toFixed(1)}s | DrowsyCount: ${state.drowsyEventCount}`);
+    setDebugInfo(`EAR: ${data.ear} | Stare: ${stareSeconds.toFixed(1)}s | Drowsy: ${state.drowsyEventCount}`);
   };
 
-  // ฟังก์ชันวาดกราฟิกทับวิดีโอ
+  // ==========================================
+  // 7. ฟังก์ชันวาดกราฟิกบนจอ (DRAWING)
+  // ==========================================
   const drawOverlay = (box, ear) => {
     if (!canvasRef.current || !videoRef.current) return;
     const ctx = canvasRef.current.getContext("2d");
     const video = videoRef.current;
     
-    // Clear Canvas
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    
-    // Sync Size
     canvasRef.current.width = video.videoWidth;
     canvasRef.current.height = video.videoHeight;
 
     if (box) {
-        // กำหนดสีตามสถานะแจ้งเตือน
-        let color = "#00FF00"; // Green
+        let color = "#00FF00"; 
         if (alertColor === "red") color = "#FF0000";
         else if (alertColor === "orange") color = "#FFA500";
         else if (alertColor === "yellow") color = "#FFFF00";
 
-        // วาดกรอบ
         ctx.strokeStyle = color;
         ctx.lineWidth = 4;
         ctx.strokeRect(box[0], box[1], box[2], box[3]);
         
-        // วาดพื้นหลังข้อความ
         ctx.fillStyle = color;
         ctx.fillRect(box[0], box[1] - 30, 100, 30);
         
-        // วาดข้อความ EAR
         ctx.fillStyle = "black";
         ctx.font = "bold 16px Arial";
         ctx.fillText(`EAR: ${ear}`, box[0] + 5, box[1] - 10);
     }
   };
 
-  // Loop ทำงานทุก 200ms
+  // ==========================================
+  // 8. เริ่ม/หยุด Loop (EFFECT)
+  // ==========================================
   useEffect(() => {
     let interval;
     if (isStreaming) {
       interval = setInterval(captureAndDetect, CONFIG.INTERVAL_MS);
     }
     return () => clearInterval(interval);
-  }, [isStreaming, alertColor]); // Re-bind เมื่อ state เปลี่ยน
+  }, [isStreaming, alertColor, isMuted]); 
 
+  // ==========================================
+  // 9. ส่วนแสดงผลหน้าจอ (RENDER UI)
+  // ==========================================
   return (
-    <div style={{ textAlign: "center", padding: "20px", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
+    <div style={{ textAlign: "center", padding: "20px", fontFamily: "sans-serif" }}>
+      
+      {/* แท็ก Audio สำหรับโหลดไฟล์เสียงมารอก่อน (Preload) เพื่อแก้ปัญหาดีเลย์ */}
+      <audio ref={warningAudioRef} src={CONFIG.PATH_WARNING_SOUND} preload="auto" />
+      <audio ref={dangerAudioRef} src={CONFIG.PATH_DANGER_SOUND} preload="auto" loop />
+
+      <style>
+        {`
+          @keyframes blink {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.02); background-color: darkred; }
+            100% { opacity: 1; transform: scale(1); }
+          }
+          .alert-box-red { animation: blink 0.5s infinite; }
+        `}
+      </style>
+
       <h2>ระบบตรวจจับความง่วงผู้ขับขี่ (Driver Drowsiness Detection)</h2>
       
-      {/* Status Box */}
-      <div style={{ 
+      <div 
+        className={alertColor === "red" ? "alert-box-red" : ""}
+        style={{ 
           padding: "20px", 
           backgroundColor: alertColor === "gray" ? "#ddd" : alertColor,
           color: alertColor === "yellow" || alertColor === "gray" ? "black" : "white", 
           borderRadius: "15px", 
           marginBottom: "20px",
-          boxShadow: "0 4px 8px rgba(0,0,0,0.2)",
-          transition: "all 0.3s ease"
+          border: alertColor === "red" ? "5px solid #ff0000" : "none"
       }}>
           <h1 style={{ margin: 0, fontSize: "2.5rem" }}>{statusText}</h1>
-          <p style={{ margin: "10px 0 0 0", opacity: 0.8, fontSize: "1rem" }}>{debugInfo}</p>
+          <p style={{ margin: "10px 0 0 0", opacity: 0.8 }}>{debugInfo}</p>
       </div>
 
-      {/* Video Area */}
       <div style={{ position: "relative", width: "640px", height: "480px", margin: "0 auto", border: "5px solid #333", borderRadius: "10px", overflow: "hidden" }}>
-          <video 
-            ref={videoRef} autoPlay playsInline muted
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)", objectFit: "cover" }} 
-          />
-          <canvas 
-            ref={canvasRef} 
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)" }} 
-          />
+          <video ref={videoRef} autoPlay playsInline muted style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)", objectFit: "cover" }} />
+          <canvas ref={canvasRef} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)" }} />
       </div>
 
-      {/* Controls */}
       <div style={{ marginTop: "30px" }}>
         {!isStreaming ? 
-            <button 
-                onClick={() => { 
+            <button onClick={() => { 
+                    resetSystem(); 
                     setIsStreaming(true); 
                     navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
                         .then(stream => videoRef.current.srcObject = stream); 
                 }} 
-                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "50px"}}
-            >
-                เริ่มทำงาน (Start)
+                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "50px", marginRight: "10px"}}>
+                เริ่มทำงานใหม่ (Start)
             </button> 
             :
-            <button 
-                onClick={() => setIsStreaming(false)} 
-                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#dc3545", color: "white", border: "none", borderRadius: "50px"}}
-            >
+            <button onClick={() => setIsStreaming(false)} 
+                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#dc3545", color: "white", border: "none", borderRadius: "50px", marginRight: "10px"}}>
                 หยุด (Stop)
             </button>
         }
+
+        <button onClick={() => setIsMuted(!isMuted)} 
+            style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#007bff", color: "white", border: "none", borderRadius: "50px"}}>
+            {isMuted ? "🔇 ปิดเสียง" : "🔊 เปิดเสียง"}
+        </button>
       </div>
     </div>
   );
