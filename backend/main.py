@@ -1,53 +1,73 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-# 1. เพิ่มตัวช่วยเชื่อมต่อ MongoDB
 from motor.motor_asyncio import AsyncIOMotorClient
+from passlib.context import CryptContext
+
+# นำเข้าแบบแปลนจาก models.py
+from models import UserRegister, UserLogin
 
 app = FastAPI()
 
-# อนุญาตให้ React (หน้าบ้าน) เข้ามาคุยกับ Backend ได้
+# 1. ตั้งค่าความปลอดภัย (Hashing Password)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 2. เชื่อมต่อ MongoDB
+MONGO_URL = "mongodb://127.0.0.1:27017" 
+client = AsyncIOMotorClient(MONGO_URL)
+db = client.drowsiness_db
+
+# --- ปรับ CORS ให้ระบุชัดเจน (แก้ปัญหา Browser บล็อก) ---
+origins = [
+    "http://localhost:5173",    # React
+    "http://127.0.0.1:5173",    # React IP
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ยอมรับทุกเว็บ (สำหรับช่วงทดสอบ)
+    allow_origins=origins,      # เปลี่ยนจาก ["*"] เป็นระบุชัดเจน เพื่อความชัวร์
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. ตั้งค่าการเชื่อมต่อ Database (แบบ Local ในเครื่อง)
-# ไม่ต้องใช้รหัสผ่านเพราะรันในเครื่องตัวเอง
-MONGO_URL = "mongodb://127.0.0.1:27017"
-
-try:
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client.drowsiness_db  # ตั้งชื่อ Database ว่า drowsiness_db
-    print("MongoDB Client Created")
-except Exception as e:
-    print(f"Error connecting to MongoDB: {e}")
-
-# 3. หน้าแรก (Home)
+# --- 👇 [ส่วนที่เพิ่มใหม่] จุดเช็คชื่อหน้าบ้าน ---
 @app.get("/")
 async def root():
-    return {"message": "สวัสดี! Backend ของฉันทำงานแล้วนะ (FastAPI Running)"}
+    return {"message": "Drowsiness Detection API is Running!"}
 
-# 4. API เช็คสถานะ Database (เพิ่มใหม่)
-# เอาไว้ให้ React ยิงมาเช็คว่าต่อ Database ติดไหม
-@app.get("/check-db")
-async def check_database():
-    try:
-        # ลองส่งคำสั่ง ping ไปเช็ค
-        await client.admin.command('ping')
-        return {"status": "Database Connected Successfully! (Local MongoDB)"}
-    except Exception as e:
-        return {"status": "Connection Failed", "error": str(e)}
+# --- [Backlog-03] ระบบสมัครสมาชิก (Register) ---
+@app.post("/api/register")
+async def register(user: UserRegister):
+    existing_user = await db.users.find_one({"username": user.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="ชื่อผู้ใช้นี้มีคนใช้แล้ว")
 
-# 5. จำลอง API ตรวจจับความง่วง (Mock Up)
-@app.get("/api/detect-mock")
-async def detect_mock():
-    # สมมติว่าตอนนี้ค่า EAR ต่ำมาก (ง่วง)
+    hashed_password = pwd_context.hash(user.password)
+
+    new_user = {
+        "username": user.username,
+        "email": user.email,
+        "password": hashed_password,
+        "role": "user"
+    }
+
+    await db.users.insert_one(new_user)
+    return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
+
+# --- [Backlog-03] ระบบเข้าสู่ระบบ (Login) ---
+@app.post("/api/login")
+async def login(user: UserLogin):
+    db_user = await db.users.find_one({"username": user.username})
+    
+    if not db_user:
+        raise HTTPException(status_code=400, detail="ไม่พบชื่อผู้ใช้นี้")
+
+    if not pwd_context.verify(user.password, db_user["password"]):
+        raise HTTPException(status_code=400, detail="รหัสผ่านไม่ถูกต้อง")
+
     return {
         "status": "success",
-        "ear_value": 0.18,
-        "is_drowsy": True,
-        "alert_message": "ตื่นเดี๋ยวนี้! คุณกำลังหลับตา!"
+        "message": "เข้าสู่ระบบสำเร็จ",
+        "username": db_user["username"],
+        "role": db_user["role"]
     }

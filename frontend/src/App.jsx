@@ -1,83 +1,66 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import Register from './Register'
+import Login from './Login'
 
 function App() {
-  const [status, setStatus] = useState("กำลังเชื่อมต่อ...")
-  const [aiResult, setAiResult] = useState(null)
+  const [status, setStatus] = useState("กำลังตรวจสอบ...")
+  const [currentView, setCurrentView] = useState("login")
+  
+  // 🌟 เพิ่มตัวแปรเก็บข้อมูลคนล็อกอิน
+  const [user, setUser] = useState(null); 
 
-  // 1. ทันทีที่เข้าเว็บ ให้ไปทักทาย Backend
   useEffect(() => {
     axios.get('http://127.0.0.1:8000/')
-      .then(response => {
-        setStatus(response.data.message) // เอาข้อความจาก Python มาโชว์
-      })
-      .catch(error => {
-        setStatus("เชื่อมต่อไม่ได้! (ลืมเปิด Backend หรือเปล่า?)")
-        console.error(error)
-      })
+      .then(res => setStatus("✅ " + res.data.message))
+      .catch(err => setStatus("❌ เชื่อมต่อ Backend ไม่ได้"))
   }, [])
 
-  // 2. ฟังก์ชันกดปุ่มเพื่อจำลองการตรวจจับ
-  const checkDrowsiness = () => {
-    axios.get('http://127.0.0.1:8000/api/detect-mock')
-      .then(response => {
-        setAiResult(response.data) // เอาผลลัพธ์มาใส่ตัวแปร
-      })
-      .catch(error => {
-        alert("เกิดข้อผิดพลาดในการดึงข้อมูล AI")
-      })
+  // ฟังก์ชัน Logout (แค่ล้างค่า user ออก)
+  const handleLogout = () => {
+    setUser(null);
+    setCurrentView("login");
   }
 
   return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', padding: '50px' }}>
-      <h1>😴 ระบบตรวจจับความง่วง (React + FastAPI)</h1>
-      
-      {/* กล่องแสดงสถานะ Backend */}
-      <div style={{ 
-        backgroundColor: '#e3f2fd', 
-        padding: '20px', 
-        borderRadius: '10px',
-        margin: '20px auto',
-        maxWidth: '600px',
-        border: '2px solid #2196f3'
-      }}>
-        <h3>สถานะ Server:</h3>
-        <p style={{ fontSize: '18px', color: '#0d47a1' }}>{status}</p>
-      </div>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
+      <h1>🚗 SE4AI Drowsiness Project</h1>
+      <p style={{ fontSize: '12px', color: '#888' }}>Server: {status}</p>
+      <hr />
 
-      <hr style={{ margin: '30px 0' }} />
+      {/* 👇 เงื่อนไข: ถ้ามี User (ล็อกอินแล้ว) ให้โชว์หน้า Dashboard */}
+      {user ? (
+        <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px" }}>
+          <h2>🎉 ยินดีต้อนรับ, {user.username}!</h2>
+          <p>สถานะของคุณคือ: <strong>{user.role}</strong></p>
+          
+          <div style={{ marginTop: "20px" }}>
+             {/* ตรงนี้เดี๋ยวเราจะใส่ปุ่ม AI Detection ใน Backlog ถัดไป */}
+             <button style={{ fontSize: "20px", padding: "15px", background: "orange", border: "none", cursor: "pointer" }}>
+                📷 เริ่มตรวจจับความง่วง
+             </button>
+          </div>
 
-      {/* ส่วนทดสอบ AI */}
-      <h2>ทดสอบระบบแจ้งเตือน</h2>
-      <button 
-        onClick={checkDrowsiness}
-        style={{
-          padding: '15px 30px',
-          fontSize: '20px',
-          backgroundColor: '#ff9800',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer'
-        }}
-      >
-        📷 ลองตรวจจับ (จำลอง)
-      </button>
+          <button onClick={handleLogout} style={{ marginTop: "20px", background: "red", color: "white", padding: "10px", border: "none" }}>
+            ออกจากระบบ
+          </button>
+        </div>
+      ) : (
+        // 👇 ถ้ายังไม่ล็อกอิน ให้โชว์หน้า Login/Register เหมือนเดิม
+        <div>
+          <div style={{ marginBottom: "20px" }}>
+            <button onClick={() => setCurrentView("login")} style={{ marginRight: "10px", padding: "10px", fontWeight: currentView === "login" ? "bold" : "normal" }}>เข้าสู่ระบบ</button>
+            <button onClick={() => setCurrentView("register")} style={{ padding: "10px", fontWeight: currentView === "register" ? "bold" : "normal" }}>สมัครสมาชิก</button>
+          </div>
 
-      {/* แสดงผลลัพธ์ถ้ามีข้อมูล */}
-      {aiResult && (
-        <div style={{ 
-          marginTop: '30px', 
-          padding: '20px', 
-          border: '2px solid red', 
-          borderRadius: '10px',
-          backgroundColor: '#ffebee'
-        }}>
-          <h2 style={{ color: 'red' }}>⚠️ {aiResult.alert_message}</h2>
-          <p>ค่า EAR: <strong>{aiResult.ear_value}</strong></p>
-          <p>สถานะ: <strong>{aiResult.is_drowsy ? "ง่วงนอน (Drowsy)" : "ปกติ"}</strong></p>
+          {currentView === "login" ? (
+            <Login onLoginSuccess={setUser} /> 
+          ) : (
+            <Register />
+          )}
         </div>
       )}
+
     </div>
   )
 }
