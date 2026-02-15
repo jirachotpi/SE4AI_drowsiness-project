@@ -3,10 +3,9 @@ import axios from 'axios'
 import Register from './Register'
 import Login from './Login'
 import AdminDashboard from './AdminDashboard'
-import WebcamCapture from './WebcamCapture' // <--- 1. นำเข้าไฟล์กล้อง
+import WebcamCapture from './WebcamCapture'
 
 function App() {
-  // ... (โค้ดส่วนเดิม: status, user, useEffect, handleLogout ไม่ต้องแก้) ...
   const [status, setStatus] = useState("กำลังตรวจสอบ...")
   const [currentView, setCurrentView] = useState("login")
   const [user, setUser] = useState(null); 
@@ -22,20 +21,18 @@ function App() {
     setCurrentView("login");
   }
 
-  // ส่วนแสดงผลเมื่อล็อกอินแล้ว
   const renderLoggedInView = () => {
     if (user.role === 'admin') {
       return <AdminDashboard user={user} onLogout={handleLogout} />;
     } else {
-      // หน้าจอสำหรับ User (คนขับรถ)
       return (
         <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px", backgroundColor: "#e8f5e9" }}>
           <h2 style={{ color: "green" }}>🚗 Driver Dashboard</h2>
           <p>ยินดีต้อนรับ, {user.username}!</p>
           
-          {/* 👇 2. เรียกใช้กล้องตรงนี้! */}
+          {/* 👇 แก้ไขตรงนี้ครับ */}
           <div style={{ marginTop: "20px" }}>
-             <WebcamCapture />
+             <WebcamCapture user={user} />
           </div>
 
           <button onClick={handleLogout} style={{ marginTop: "20px", background: "red", color: "white", padding: "10px", border: "none", cursor: "pointer" }}>
@@ -46,7 +43,6 @@ function App() {
     }
   }
 
-  // ... (ส่วน return ด้านล่างเหมือนเดิม ไม่ต้องแก้) ...
   return (
     <div style={{ fontFamily: 'Arial', textAlign: 'center', padding: '20px' }}>
       <h1>SE4AI Project</h1>

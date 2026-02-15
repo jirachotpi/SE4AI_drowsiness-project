@@ -9,18 +9,18 @@ const CONFIG = {
   THRESH_LONG_BLINK: 0.4,    // สีเหลือง: ตาปิดเกิน 0.4 วิ
   THRESH_MICROSLEEP: 1.0,    // สีส้ม: ตาปิดเกิน 1.0 วิ (วูบ)
   THRESH_DEEP_SLEEP: 2.0,    // สีแดง: ตาปิดเกิน 2.0 วิ (หลับใน)
-  THRESH_STARING: 8.0,      // สีแดง: เหม่อลอย/ตาค้างเกิน 8 วิ
+  THRESH_STARING: 8.0,       // สีแดง: เหม่อลอย/ตาค้างเกิน 8 วิ
   THRESH_FREQ_COUNT: 5,      // สีแดง: วูบครบ 5 ครั้ง
   COOLDOWN_MS: 60000,        // เวลา reset นับจำนวนวูบ (1 นาที)
   RECOVERY_TIME: 3.0,        // เวลาที่ต้องลืมตาต่อเนื่องเพื่อให้หายง่วง (3 วิ)
-  WARNING_DURATION: 1000,    // ความยาวเสียงเตือนสีส้ม (ปรับตามความยาวไฟล์คุณ)
+  WARNING_DURATION: 1000,    // ความยาวเสียงเตือนสีส้ม
   
-  // --- เส้นทางไฟล์เสียงในโฟลเดอร์ public ---
+  // --- เส้นทางไฟล์เสียง ---
   PATH_WARNING_SOUND: "/Orange_alarm.mp3", 
   PATH_DANGER_SOUND: "/Red_alarm.mp3"
 };
 
-function WebcamCapture() {
+function WebcamCapture({ user }) {
   // ==========================================
   // 2. ตัวแปรและ State (VARIABLES)
   // ==========================================
@@ -28,32 +28,57 @@ function WebcamCapture() {
   const canvasRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   
-  // UI State (ข้อความและสีบนหน้าจอ)
+  // UI State
   const [statusText, setStatusText] = useState("รอเริ่มระบบ...");
   const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
-  // Audio Refs (เชื่อมกับ HTML Audio Tag เพื่อลด Latency/ดีเลย์)
+  // Audio Refs
   const warningAudioRef = useRef(null); 
   const dangerAudioRef = useRef(null); 
   const [isMuted, setIsMuted] = useState(false);
 
-  // Logic State (ตัวแปรจำค่าระบบ ไม่ Reset เมื่อ render)
+  // Logic State
   const logicState = useRef({
-    consecutiveClosedFrames: 0, // ปิดตาต่อเนื่อง (frame)
-    consecutiveOpenFrames: 0,   // ลืมตาต่อเนื่อง (frame)
-    drowsyEventCount: 0,        // นับจำนวนครั้งที่วูบ
+    consecutiveClosedFrames: 0,
+    consecutiveOpenFrames: 0,
+    drowsyEventCount: 0,
     lastDrowsyEventTime: Date.now(),
     lastBlinkTime: Date.now(),
-    isPlayingDanger: false,     // สถานะกำลังเล่นเสียงแดง
-    isPlayingWarning: false     // สถานะกำลังเล่นเสียงส้ม
+    isPlayingDanger: false,
+    isPlayingWarning: false
   });
 
+  // 👇 [NEW] ตัวช่วยจำค่าสำหรับ Log (เพิ่มใหม่)
+  const latestEarRef = useRef(0.0);       // จำค่า EAR ล่าสุดเสมอ
+  const eventStartTimeRef = useRef(null); // จำเวลาที่เริ่มง่วง (Start Time)
+  const isLoggingRef = useRef(false);     // จำสถานะว่า "กำลังเกิดเหตุ" อยู่ไหม
+
   // ==========================================
-  // 3. ฟังก์ชันรีเซ็ตระบบ (RESET)
+  // [NEW] ฟังก์ชันบันทึก LOG (แก้ใหม่ให้รับ Duration)
+  // ==========================================
+  const saveLog = async (eventType, duration, ear) => {
+    try {
+      const username = user ? user.username : "Guest";
+      
+      // ส่งข้อมูลไปที่ Backend
+      await axios.post("http://127.0.0.1:8000/api/logs", {
+        user_id: username,
+        event_type: eventType,
+        ear_value: ear,        // ✅ ส่งค่าจริง
+        duration_ms: duration  // ✅ ส่งระยะเวลาจริง
+      });
+      console.log(`📝 บันทึก: ${eventType} (${duration}ms) EAR:${ear}`);
+    } catch (err) {
+      console.error("❌ บันทึก Log ไม่สำเร็จ:", err);
+    }
+  };
+
+  // ==========================================
+  // 3. ฟังก์ชันรีเซ็ตระบบ
   // ==========================================
   const resetSystem = () => {
-    // หยุดเสียงทั้งหมด
+    // แก้ไข: เช็ค null ก่อนเรียกใช้
     if (warningAudioRef.current) {
         warningAudioRef.current.pause();
         warningAudioRef.current.currentTime = 0;
@@ -63,7 +88,6 @@ function WebcamCapture() {
         dangerAudioRef.current.currentTime = 0;
     }
 
-    // ล้างค่าตัวแปรทั้งหมด
     logicState.current = {
       consecutiveClosedFrames: 0,
       consecutiveOpenFrames: 0,
@@ -74,19 +98,22 @@ function WebcamCapture() {
       isPlayingWarning: false
     };
     
-    // อัปเดตหน้าจอ
+    // Reset Log refs
+    eventStartTimeRef.current = null;
+    isLoggingRef.current = false;
+    latestEarRef.current = 0.0;
+
     setStatusText("ระบบพร้อมทำงาน...");
     setAlertColor("green");
     setDebugInfo("ค่าทั้งหมดถูกรีเซตแล้ว");
   };
 
   // ==========================================
-  // 4. ฟังก์ชันจัดการเสียง (SOUND MANAGER)
+  // 4. ฟังก์ชันจัดการเสียง
   // ==========================================
   const handleSound = (type) => {
     if (isMuted) return; 
 
-    // กรณีสั่งหยุดเสียง (Stop)
     if (type === "stop") {
         if (dangerAudioRef.current) {
             dangerAudioRef.current.pause();
@@ -101,9 +128,7 @@ function WebcamCapture() {
         return;
     }
 
-    // กรณีเสียงอันตรายสีแดง (Danger) -> ต้องดังทันทีและหยุดเสียงส้ม
     if (type === "danger") {
-        // --- ส่วนที่เพิ่ม: สั่งหยุดเสียงสีส้มทันทีถ้าแดงจะดัง ---
         if (warningAudioRef.current) {
             warningAudioRef.current.pause();
             warningAudioRef.current.currentTime = 0;
@@ -117,17 +142,14 @@ function WebcamCapture() {
         }
     }
 
-    // กรณีเสียงเตือนสีส้ม (Warning)
     if (type === "warning") {
-        // เล่นเฉพาะเมื่อเสียงแดงไม่ดังอยู่เท่านั้น
         if (!logicState.current.isPlayingWarning && !logicState.current.isPlayingDanger && warningAudioRef.current) {
             logicState.current.isPlayingWarning = true;
             warningAudioRef.current.currentTime = 0;
             warningAudioRef.current.play().catch((e) => console.log("Audio play error:", e));
 
-            // หยุดเสียงส้มเมื่อครบเวลาที่กำหนด (ถ้าไฟล์คุณยาวเกินไป)
             setTimeout(() => {
-                if (!logicState.current.isPlayingDanger) { // ถ้าแดงยังไม่มาค่อยหยุด
+                if (!logicState.current.isPlayingDanger && warningAudioRef.current) {
                     warningAudioRef.current.pause();
                     warningAudioRef.current.currentTime = 0;
                 }
@@ -136,7 +158,7 @@ function WebcamCapture() {
         }
     }
   };
-
+  
   // ==========================================
   // 5. ฟังก์ชันหลัก: จับภาพและวิเคราะห์
   // ==========================================
@@ -144,12 +166,21 @@ function WebcamCapture() {
     if (!videoRef.current || !isStreaming) return;
     
     const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
-    tempCanvas.getContext("2d").drawImage(video, 0, 0);
+    const ctx = tempCanvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
 
     tempCanvas.toBlob(async (blob) => {
+      // ✅ แก้ไข: ป้องกัน Error parameter 2 is not of type 'Blob'
+      if (!blob) {
+        console.warn("⚠️ ไม่สามารถสร้าง Blob ได้ในเฟรมนี้");
+        return; 
+      }
+
       const formData = new FormData();
       formData.append("file", blob, "frame.jpg");
 
@@ -161,15 +192,19 @@ function WebcamCapture() {
         analyzeFatigue(data);
 
       } catch (err) {
-        console.error("API Error:", err);
+        console.error("API Error:", err.response?.data || err.message);
       }
     }, "image/jpeg");
   };
 
   // ==========================================
-  // 6. สมองของระบบ: วิเคราะห์ความง่วง (LOGIC)
+  // 6. สมองของระบบ: วิเคราะห์ความง่วง
   // ==========================================
   const analyzeFatigue = (data) => {
+    if (data.ear) {
+        latestEarRef.current = data.ear;
+    }
+
     const NOW = Date.now();
     const state = logicState.current;
 
@@ -209,7 +244,7 @@ function WebcamCapture() {
     const currentClosedSeconds = (state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
 
-    // 🔴 โซนสีแดง (เช็คเงื่อนไขแดงก่อนเพื่อความเร็ว)
+    // 🔴 โซนสีแดง
     if (currentClosedSeconds >= CONFIG.THRESH_DEEP_SLEEP || 
         stareSeconds >= CONFIG.THRESH_STARING || 
         state.drowsyEventCount >= CONFIG.THRESH_FREQ_COUNT) {
@@ -241,7 +276,7 @@ function WebcamCapture() {
   };
 
   // ==========================================
-  // 7. ฟังก์ชันวาดกราฟิกบนจอ (DRAWING)
+  // 7. ฟังก์ชันวาดกราฟิก
   // ==========================================
   const drawOverlay = (box, ear) => {
     if (!canvasRef.current || !videoRef.current) return;
@@ -272,7 +307,7 @@ function WebcamCapture() {
   };
 
   // ==========================================
-  // 8. เริ่ม/หยุด Loop (EFFECT)
+  // 8. เริ่ม/หยุด Loop
   // ==========================================
   useEffect(() => {
     let interval;
@@ -282,13 +317,32 @@ function WebcamCapture() {
     return () => clearInterval(interval);
   }, [isStreaming, alertColor, isMuted]); 
 
+  // 👇 [NEW] Effect สำหรับบันทึก Log
+  useEffect(() => {
+    if (alertColor === "red" || alertColor === "orange") {
+      if (!eventStartTimeRef.current) {
+        eventStartTimeRef.current = Date.now(); 
+        isLoggingRef.current = true;            
+      }
+    } 
+    else if (alertColor === "green") {
+      if (isLoggingRef.current && eventStartTimeRef.current) {
+        const endTime = Date.now();
+        const duration = endTime - eventStartTimeRef.current; 
+        const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
+        saveLog(finalType, duration, latestEarRef.current);
+        eventStartTimeRef.current = null;
+        isLoggingRef.current = false;
+      }
+    }
+  }, [alertColor]);
+
   // ==========================================
-  // 9. ส่วนแสดงผลหน้าจอ (RENDER UI)
+  // 9. ส่วนแสดงผล (RENDER)
   // ==========================================
   return (
     <div style={{ textAlign: "center", padding: "20px", fontFamily: "sans-serif" }}>
       
-      {/* แท็ก Audio สำหรับโหลดไฟล์เสียงมารอก่อน (Preload) เพื่อแก้ปัญหาดีเลย์ */}
       <audio ref={warningAudioRef} src={CONFIG.PATH_WARNING_SOUND} preload="auto" />
       <audio ref={dangerAudioRef} src={CONFIG.PATH_DANGER_SOUND} preload="auto" loop />
 
@@ -330,7 +384,7 @@ function WebcamCapture() {
                     resetSystem(); 
                     setIsStreaming(true); 
                     navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-                        .then(stream => videoRef.current.srcObject = stream); 
+                        .then(stream => { if(videoRef.current) videoRef.current.srcObject = stream; }); 
                 }} 
                 style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "50px", marginRight: "10px"}}>
                 เริ่มทำงานใหม่ (Start)

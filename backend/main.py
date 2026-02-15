@@ -6,6 +6,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import uvicorn
+from datetime import datetime             # <--- เพิ่มการจัดการเวลา
+from pydantic import BaseModel, Field     # <--- เพิ่ม Field
 
 # นำเข้าแบบแปลนจาก models.py (ต้องมีไฟล์ models.py อยู่ที่เดิมนะครับ)
 from models import UserRegister, UserLogin
@@ -50,8 +52,7 @@ face_mesh = mp_face_mesh.FaceMesh(
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
 
-# ค่า Threshold พื้นฐาน (Sensor Level)
-# หมายเหตุ: Frontend จะเป็นตัวตัดสินใจเรื่องเวลา (Time), อันนี้แค่บอกว่า "ปิดหรือไม่"
+# ค่า Threshold พื้นฐาน
 EYE_AR_THRESH = 0.21 
 
 def calculate_ear(landmarks, indices, img_w, img_h):
@@ -67,6 +68,16 @@ def calculate_ear(landmarks, indices, img_w, img_h):
         return (v1 + v2) / (2.0 * h)
     except Exception:
         return 0.0
+
+# ==========================================
+# [NEW] MODEL สำหรับ LOGGING (PB-08)
+# ==========================================
+class LogEntry(BaseModel):
+    user_id: str
+    event_type: str       # เช่น "drowsy", "deep_sleep"
+    ear_value: float      # ค่า EAR ณ เวลาที่เกิดเหตุ
+    duration_ms: int = 0  # <--- ✅ [เพิ่มใหม่] เก็บระยะเวลาที่หลับ (ms)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 # ==========================================
 # 3. API ROUTES (Endpoints)
@@ -109,6 +120,17 @@ async def login(user: UserLogin):
         "username": db_user["username"],
         "role": db_user["role"]
     }
+
+# --- [PB-08] ระบบบันทึก Log ---
+@app.post("/api/logs")
+async def create_log(log: LogEntry):
+    # แปลงข้อมูลเป็น Dict เพื่อเตรียมลง DB
+    log_dict = log.dict()
+    
+    # บันทึกลง Collection ชื่อ "logs"
+    result = await db.logs.insert_one(log_dict)
+    
+    return {"message": "Log saved", "id": str(result.inserted_id)}
 
 # --- [AI] ระบบตรวจจับความง่วง (Sensor Logic) ---
 @app.post("/api/detect")
@@ -167,6 +189,21 @@ async def detect_drowsiness(file: UploadFile = File(...)):
         return {"status": "error", "message": str(e)}
 
     return {"status": "error"}
+
+# --- [NEW] API สำหรับดึงประวัติการหลับ (GET) ---
+@app.get("/api/logs")
+async def get_logs():
+    # ดึงข้อมูลจาก MongoDB (เรียงจากใหม่สุดไปเก่าสุด, เอามาแค่ 20 อันล่าสุด)
+    logs = await db.logs.find().sort("timestamp", -1).limit(20).to_list(20)
+    
+    # แปลงข้อมูลให้เป็น JSON ที่ส่งกลับได้ (แปลง ObjectId เป็น string)
+    results = []
+    for log in logs:
+        log["id"] = str(log["_id"]) # แปลง _id เป็น id
+        del log["_id"]              # ลบ field _id ทิ้ง (เพราะ JSON อ่านไม่ได้)
+        results.append(log)
+        
+    return results
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
