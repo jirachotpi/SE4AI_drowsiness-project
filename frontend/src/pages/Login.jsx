@@ -6,6 +6,7 @@ import "../styles/Auth.css";
 
 function Login({ onLoginSuccess }) {
   const [formData, setFormData] = useState({ username: "", password: "" });
+  const [isLoading, setIsLoading] = useState(false); // เพิ่มสถานะ Loading
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -13,11 +14,17 @@ function Login({ onLoginSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true); // เริ่มโหลด
     try {
       const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
+      
+      // บันทึกข้อมูลลงเครื่อง
+      localStorage.setItem('drowsiness_user', JSON.stringify(response.data));
       onLoginSuccess(response.data);
     } catch (error) {
       alert("❌ " + (error.response?.data?.detail || "เข้าสู่ระบบไม่สำเร็จ"));
+    } finally {
+      setIsLoading(false); // จบการโหลด
     }
   };
 
@@ -40,7 +47,9 @@ function Login({ onLoginSuccess }) {
               placeholder="กรอกรหัสผ่าน" onChange={handleChange} required 
             />
           </div>
-          <button type="submit" className="btn-submit">เข้าสู่ระบบ</button>
+          <button type="submit" className="btn-submit" disabled={isLoading}>
+            {isLoading ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
+          </button>
         </form>
         <div className="auth-link">
           ยังไม่มีบัญชีใช่ไหม? <Link to="/register">สมัครสมาชิกที่นี่</Link>

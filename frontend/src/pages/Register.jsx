@@ -6,6 +6,7 @@ import "../styles/Auth.css";
 
 function Register() {
   const [formData, setFormData] = useState({ username: "", email: "", password: "" });
+  const [isLoading, setIsLoading] = useState(false); // เพิ่มสถานะ Loading
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -14,12 +15,15 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true); // เริ่มโหลด
     try {
       const response = await axios.post("http://127.0.0.1:8000/api/register", formData);
       alert("✅ สมัครสมาชิกสำเร็จ: " + response.data.message);
-      navigate("/login"); // สมัครเสร็จให้เด้งไปหน้า Login อัตโนมัติ
+      navigate("/login");
     } catch (error) {
       alert("❌ เกิดข้อผิดพลาด: " + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsLoading(false); // จบการโหลด
     }
   };
 
@@ -49,8 +53,8 @@ function Register() {
               placeholder="ตั้งรหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" onChange={handleChange} required 
             />
           </div>
-          <button type="submit" className="btn-submit" style={{ backgroundColor: "#2ecc71" }}>
-            ยืนยันการสมัคร
+          <button type="submit" className="btn-submit" style={{ backgroundColor: "#2ecc71" }} disabled={isLoading}>
+            {isLoading ? "กำลังประมวลผล..." : "ยืนยันการสมัคร"}
           </button>
         </form>
         <div className="auth-link">
