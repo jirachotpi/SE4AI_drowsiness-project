@@ -28,3 +28,8 @@ py -3.11 -m venv venv
 
 pip install -r requirements.txt
 
+
+
+Terminal 1 (Frontend): cd frontend -> npm run dev (หรือ npm start)
+
+Terminal 2 (Backend): cd backend -> .\venv\Scripts\activate -> uvicorn main:app --reload
