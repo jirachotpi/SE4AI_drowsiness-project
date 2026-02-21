@@ -4,22 +4,22 @@
 ให้เพื่อนเปิด Terminal หรือ Command Prompt ในโฟลเดอร์ที่อยากเก็บงาน แล้วรันคำสั่งตามนี้ครับ:
 
 1. ดึงโค้ดลงเครื่อง
-PowerShell
+
 git clone https://github.com/jirachotpi/SE4AI_drowsiness-project.git
 
 cd SE4AI_drowsiness-project
 
 3. ติดตั้งฝั่ง Frontend (React)
-PowerShell
+
 cd frontend
 npm install
 
 4. ติดตั้งฝั่ง Backend (Python)
 เปิด Terminal อีกหน้านึง (หรือกลับไปที่โฟลเดอร์โปรเจกต์หลัก) แล้วทำตามนี้:
 
-PowerShell
 cd backend
-python -m venv venv
+
+py -3.11 -m venv venv
 
 # เปิดใช้งาน Virtual Environment (สำหรับ Windows)
 .\venv\Scripts\activate
@@ -27,3 +27,4 @@ python -m venv venv
 # ติดตั้งไลบรารีทั้งหมดที่ระบุไว้ใน requirements.txt
 
 pip install -r requirements.txt
+
