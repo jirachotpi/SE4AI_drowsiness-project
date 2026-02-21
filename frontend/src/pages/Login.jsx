@@ -1,7 +1,9 @@
+// --- frontend/src/pages/Login.jsx ---
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
+import "../styles/Auth.css";
 
-// รับ props ชื่อ onLoginSuccess มาจาก App.jsx
 function Login({ onLoginSuccess }) {
   const [formData, setFormData] = useState({ username: "", password: "" });
 
@@ -13,31 +15,37 @@ function Login({ onLoginSuccess }) {
     e.preventDefault();
     try {
       const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
-      
-      // ✅ ถ้าผ่าน: ส่งข้อมูล user กลับไปที่ App.jsx
       onLoginSuccess(response.data);
-      
     } catch (error) {
       alert("❌ " + (error.response?.data?.detail || "เข้าสู่ระบบไม่สำเร็จ"));
     }
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "400px", margin: "auto", border: "1px solid #ccc", borderRadius: "8px" }}>
-      <h2>เข้าสู่ระบบ (Driver Login)</h2>
-      <form onSubmit={handleSubmit}>
-        <input 
-          type="text" name="username" placeholder="Username" onChange={handleChange} required 
-          style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-        />
-        <input 
-          type="password" name="password" placeholder="Password" onChange={handleChange} required 
-          style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-        />
-        <button type="submit" style={{ padding: "10px 20px", background: "green", color: "white", border: "none", width: "100%" }}>
-          เข้าสู่ระบบ
-        </button>
-      </form>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2 className="auth-title">เข้าสู่ระบบ (Login)</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Username</label>
+            <input 
+              type="text" name="username" className="form-control" 
+              placeholder="กรอกชื่อผู้ใช้" onChange={handleChange} required 
+            />
+          </div>
+          <div className="form-group">
+            <label>Password</label>
+            <input 
+              type="password" name="password" className="form-control" 
+              placeholder="กรอกรหัสผ่าน" onChange={handleChange} required 
+            />
+          </div>
+          <button type="submit" className="btn-submit">เข้าสู่ระบบ</button>
+        </form>
+        <div className="auth-link">
+          ยังไม่มีบัญชีใช่ไหม? <Link to="/register">สมัครสมาชิกที่นี่</Link>
+        </div>
+      </div>
     </div>
   );
 }
