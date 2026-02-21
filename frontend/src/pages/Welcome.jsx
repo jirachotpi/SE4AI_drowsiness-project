@@ -1,26 +1,44 @@
 // --- frontend/src/pages/Welcome.jsx ---
+import React from 'react';
 import { Link } from 'react-router-dom';
+import '../styles/Welcome.css'; // เรียกใช้ CSS ที่เพิ่งสร้าง
 
 function Welcome() {
     return (
-        <div style={{ textAlign: 'center', marginTop: '10vh' }}>
-            <h1 style={{ fontSize: '3rem', color: '#2c3e50' }}>SE4AI Drowsiness Detection</h1>
-            <p style={{ fontSize: '1.2rem', color: '#7f8c8d' }}>
-                ระบบ AI ตรวจจับความง่วงและหลับใน เพื่อความปลอดภัยในการขับขี่ของคุณ
+        <div className="welcome-container">
+            <h1 className="welcome-title">🚗 SE4AI Drowsiness</h1>
+            <p className="welcome-subtitle">
+                ระบบผู้ช่วย AI ตรวจจับความง่วงและอาการหลับในแบบเรียลไทม์ 
+                ปกป้องคุณและเพื่อนร่วมทางให้ถึงที่หมายอย่างปลอดภัย
             </p>
-            <div style={{ marginTop: '30px' }}>
+
+            {/* ส่วนแสดงฟีเจอร์เด่น */}
+            <div className="feature-grid">
+                <div className="feature-card">
+                    <h3>📷 ตรวจจับแม่นยำ</h3>
+                    <p>วิเคราะห์ใบหน้าและดวงตาด้วย AI ความเร็วสูงผ่านกล้อง Webcam</p>
+                </div>
+                <div className="feature-card">
+                    <h3>🚨 แจ้งเตือนทันที</h3>
+                    <p>ระบบเสียงเตือนอัตโนมัติเมื่อพบอาการวูบหรือหลับใน</p>
+                </div>
+                <div className="feature-card">
+                    <h3>📊 บันทึกสถิติ</h3>
+                    <p>เก็บประวัติการเดินทางและวิเคราะห์พฤติกรรมการขับขี่ของคุณ</p>
+                </div>
+            </div>
+
+            {/* ปุ่ม Call to Action */}
+            <div className="action-buttons">
                 <Link to="/login">
-                    <button style={{ padding: '15px 30px', fontSize: '1rem', background: '#3498db', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginRight: '15px' }}>
-                        เข้าสู่ระบบ
-                    </button>
+                    <button className="btn-primary">เข้าสู่ระบบ</button>
                 </Link>
                 <Link to="/register">
-                    <button style={{ padding: '15px 30px', fontSize: '1rem', background: '#2ecc71', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
-                        สมัครสมาชิก
-                    </button>
+                    <button className="btn-secondary">สมัครสมาชิกใหม่</button>
                 </Link>
             </div>
         </div>
     );
 }
+
 export default Welcome;
