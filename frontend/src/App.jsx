@@ -10,6 +10,16 @@ import Register from './pages/Register';
 import AdminDashboard from './pages/AdminDashboard';
 import WebcamCapture from './pages/WebcamCapture';
 
+// นำเข้าไฟล์เพิ่มที่ด้านบน
+import UserManagement from './pages/UserManagement';
+
+// ... เลื่อนลงมาในส่วน <Routes> เพิ่ม Route นี้เข้าไปต่อจาก /dashboard ...
+<Route path="/admin/users" element={
+  !user ? <Navigate to="/login" /> : 
+  user.role === 'admin' ? <UserManagement /> : 
+  <Navigate to="/dashboard" />
+} />
+
 import './styles/App.css';
 
 function App() {

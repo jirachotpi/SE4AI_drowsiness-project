@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # นำเข้า API ที่เราแยกไว้ในโฟลเดอร์ routers
-from app.routers import auth, logs, detection
+from app.routers import auth, logs, detection, admin
 
 app = FastAPI()
 
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(logs.router)
 app.include_router(detection.router)
+app.include_router(admin.router)
 
 @app.get("/")
 async def root():
