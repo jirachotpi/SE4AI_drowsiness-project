@@ -34,15 +34,23 @@ function AdminDashboard({ user, onLogout }) {
   return (
     <div className="admin-container">
       
-      {/* ส่วน Header ที่มีปุ่มไปหน้าจัดการผู้ใช้ และปุ่มออกจากระบบ */}
+      {/* ส่วน Header ที่มีปุ่มไปหน้าจัดการผู้ใช้, ตั้งค่าระบบ และปุ่มออกจากระบบ */}
       <div className="admin-header">
         <h1 style={{ margin: 0 }}>📊 Admin Dashboard</h1>
         <div style={{ display: "flex", gap: "10px" }}>
+          
+          <Link to="/admin/config">
+            <button style={{ background: "#f39c12", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+              ⚙️ ตั้งค่าระบบ
+            </button>
+          </Link>
+
           <Link to="/admin/users">
             <button style={{ background: "#2ecc71", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
               👥 จัดการผู้ใช้
             </button>
           </Link>
+          
           <button onClick={onLogout} style={{ background: "#e74c3c", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
             ออกจากระบบ
           </button>

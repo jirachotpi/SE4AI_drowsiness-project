@@ -10,7 +10,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminDashboard from './pages/AdminDashboard';
 import WebcamCapture from './pages/WebcamCapture';
-import UserManagement from './pages/UserManagement'; // นำเข้าหน้าจัดการผู้ใช้ (PB-18)
+import UserManagement from './pages/UserManagement'; // (PB-18)
+import SystemConfig from './pages/SystemConfig'; // นำเข้าหน้าตั้งค่าระบบ (PB-19)
 
 import './styles/App.css'; 
 
@@ -70,6 +71,13 @@ function App() {
             <Route path="/admin/users" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <UserManagement /> : 
+              <Navigate to="/dashboard" />
+            } />
+
+            {/* หน้าตั้งค่าระบบ AI (Admin เท่านั้นเข้าได้) */}
+            <Route path="/admin/config" element={
+              !user ? <Navigate to="/login" /> : 
+              user.role === 'admin' ? <SystemConfig /> : 
               <Navigate to="/dashboard" />
             } />
 

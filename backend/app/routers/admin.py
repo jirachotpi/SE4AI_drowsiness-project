@@ -57,3 +57,39 @@ async def delete_user(user_id: str):
         await db.logs.delete_many({"user_id": user_id})
         return {"message": "ลบผู้ใช้สำเร็จ"}
     raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้งาน")
+
+# 5. [NEW] API ดึงค่าการตั้งค่าระบบ (AI Thresholds)
+@router.get("/api/admin/config")
+async def get_system_config():
+    # ค้นหา config แบบตั้งค่า AI
+    config = await db.config.find_one({"type": "ai_threshold"})
+    
+    if not config:
+        # ถ้ายังไม่มีในระบบ ให้สร้างค่าเริ่มต้น (Default)
+        default_config = {
+            "type": "ai_threshold",
+            "ear_threshold": 0.2,
+            "drowsy_time": 2.0,
+            "sleep_time": 3.0
+        }
+        await db.config.insert_one(default_config)
+        del default_config["_id"]
+        return default_config
+        
+    config["id"] = str(config["_id"])
+    del config["_id"]
+    return config
+
+# 6. [NEW] API บันทึกการตั้งค่าระบบ
+@router.put("/api/admin/config")
+async def update_system_config(new_config: dict):
+    await db.config.update_one(
+        {"type": "ai_threshold"},
+        {"$set": {
+            "ear_threshold": new_config.get("ear_threshold", 0.2),
+            "drowsy_time": new_config.get("drowsy_time", 2.0),
+            "sleep_time": new_config.get("sleep_time", 3.0)
+        }},
+        upsert=True # ถ้าไม่มีให้สร้างใหม่
+    )
+    return {"message": "อัปเดตการตั้งค่าระบบสำเร็จ"}
