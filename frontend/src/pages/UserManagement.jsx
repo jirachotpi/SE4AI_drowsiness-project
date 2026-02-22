@@ -23,7 +23,7 @@ function UserManagement() {
 
   // ฟังก์ชัน ระงับ/ปลดแบน บัญชี
   const handleToggleSuspend = async (userId, currentStatus) => {
-    if (!window.confirm(ต้องการ${currentStatus ? 'ปลดแบน' : 'ระงับ'}บัญชีนี้ใช่หรือไม่?)) return;
+    if (!window.confirm(`ต้องการ${currentStatus ? 'ปลดแบน' : 'ระงับ'}บัญชีนี้ใช่หรือไม่?`)) return;
     try {
       await axios.put(`http://127.0.0.1:8000/api/admin/users/${userId}/suspend`, {
         is_suspended: !currentStatus
@@ -120,4 +120,4 @@ function UserManagement() {
   );
 }
 
-export default UserManagement;  
+export default UserManagement;

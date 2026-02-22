@@ -1,25 +1,8 @@
 // --- frontend/src/pages/AdminDashboard.jsx ---
 import { useEffect, useState } from "react";
 import axios from "axios";
-import "../styles/Admin.css";
-
-// ส่วนบนสุดของ AdminDashboard.jsx
 import { Link } from "react-router-dom";
-
-// ... เลื่อนลงมาใน return() แก้ส่วน admin-header ...
-      <div className="admin-header">
-        <h1 style={{ margin: 0 }}>📊 Admin Dashboard</h1>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <Link to="/admin/users">
-            <button style={{ background: "#2ecc71", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-              👥 จัดการผู้ใช้
-            </button>
-          </Link>
-          <button onClick={onLogout} style={{ background: "#e74c3c", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-            ออกจากระบบ
-          </button>
-        </div>
-      </div>
+import "../styles/Admin.css";
 
 function AdminDashboard({ user, onLogout }) {
   const [logs, setLogs] = useState([]); 
@@ -50,11 +33,20 @@ function AdminDashboard({ user, onLogout }) {
 
   return (
     <div className="admin-container">
+      
+      {/* ส่วน Header ที่มีปุ่มไปหน้าจัดการผู้ใช้ และปุ่มออกจากระบบ */}
       <div className="admin-header">
         <h1 style={{ margin: 0 }}>📊 Admin Dashboard</h1>
-        <button onClick={onLogout} style={{ background: "#e74c3c", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
-          ออกจากระบบ
-        </button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <Link to="/admin/users">
+            <button style={{ background: "#2ecc71", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+              👥 จัดการผู้ใช้
+            </button>
+          </Link>
+          <button onClick={onLogout} style={{ background: "#e74c3c", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer" }}>
+            ออกจากระบบ
+          </button>
+        </div>
       </div>
 
       {/* ส่วนแสดง Card สถิติ */}
@@ -77,7 +69,7 @@ function AdminDashboard({ user, onLogout }) {
         </div>
       </div>
 
-      {/* ส่วนตาราง Log (ดึงโค้ดตารางเดิมมาใส่ CSS ใหม่) */}
+      {/* ส่วนตาราง Log */}
       <div className="admin-table-container">
         <h2 style={{ marginTop: 0 }}>ประวัติการแจ้งเตือนล่าสุด</h2>
         {loading ? <p>กำลังโหลดข้อมูล...</p> : (
@@ -116,4 +108,4 @@ function AdminDashboard({ user, onLogout }) {
   );
 }
 
-export default AdminDashboard;   
+export default AdminDashboard;
