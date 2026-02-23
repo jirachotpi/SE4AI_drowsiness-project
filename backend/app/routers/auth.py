@@ -3,16 +3,33 @@ from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
 from app.database import db
 from app.models.models import UserRegister, UserLogin
+from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# สร้าง Schema สำหรับรับข้อมูลอัปเดต
+class UserUpdateModel(BaseModel):
+    username: str
+    email: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
 @router.post("/api/register")
 async def register(user: UserRegister):
+    # 1. เช็ก Username ซ้ำ
     existing_user = await db.users.find_one({"username": user.username})
     if existing_user:
         raise HTTPException(status_code=400, detail="ชื่อผู้ใช้นี้มีคนใช้แล้ว")
 
+    # 2. เช็ก Email ซ้ำ (เพิ่มใหม่ ป้องกันสมัครอีเมลซ้ำ)
+    if user.email:
+        existing_email = await db.users.find_one({"email": user.email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="อีเมลนี้มีคนใช้แล้ว")
+
+    # เข้ารหัสผ่านก่อนบันทึก
     hashed_password = pwd_context.hash(user.password)
     new_user = {
         "username": user.username,
@@ -29,6 +46,7 @@ async def login(user: UserLogin):
     if not db_user:
         raise HTTPException(status_code=400, detail="ไม่พบชื่อผู้ใช้นี้")
 
+    # ตรวจสอบรหัสผ่านที่ถูกเข้ารหัส
     if not pwd_context.verify(user.password, db_user["password"]):
         raise HTTPException(status_code=400, detail="รหัสผ่านไม่ถูกต้อง")
 
@@ -38,15 +56,6 @@ async def login(user: UserLogin):
         "username": db_user["username"],
         "role": db_user["role"]
     }
-from pydantic import BaseModel
-from typing import Optional
-
-# สร้าง Schema สำหรับรับข้อมูลอัปเดต
-class UserUpdateModel(BaseModel):
-    username: str
-    email: Optional[str] = None
-    current_password: Optional[str] = None
-    new_password: Optional[str] = None
 
 @router.get("/api/users/me")
 async def get_my_profile(username: str):
@@ -64,18 +73,24 @@ async def update_my_profile(data: UserUpdateModel):
     
     update_data = {}
     
-    # 1. ถ้ามีการส่ง Email ใหม่มา ให้เตรียมอัปเดต
-    if data.email:
+    # 1. จัดการอัปเดต Email และเช็ก Email ซ้ำ
+    if data.email and data.email != user.get("email"):
+        existing_email = await db.users.find_one({"email": data.email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="อีเมลนี้ถูกใช้งานโดยบัญชีอื่นแล้ว")
         update_data["email"] = data.email
         
-    # 2. ถ้ามีการส่ง รหัสผ่านใหม่มา ต้องเช็กรหัสผ่านเดิมก่อน
+    # 2. จัดการอัปเดตรหัสผ่าน (เช็ก Hash และเข้ารหัสใหม่)
     if data.new_password:
-        if not data.current_password or data.current_password != user.get("password"):
-            # หมายเหตุ: หากระบบคุณมีการเข้ารหัสผ่าน (Hash) ให้ใช้ฟังก์ชันตรวจสอบ Hash ตรงนี้แทน
+        if not data.current_password:
+            raise HTTPException(status_code=400, detail="กรุณากรอกรหัสผ่านปัจจุบัน")
+            
+        # เช็กรหัสผ่านปัจจุบันด้วย pwd_context.verify (แก้ไขให้เช็กถูกต้อง)
+        if not pwd_context.verify(data.current_password, user.get("password")):
             raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
         
-        # หมายเหตุ: หากระบบคุณมีการ Hash รหัสผ่าน ให้ Hash data.new_password ก่อนบันทึก
-        update_data["password"] = data.new_password 
+        # เข้ารหัสผ่านใหม่ก่อนบันทึกลง Database (แก้ไขให้เข้ารหัสก่อนบันทึก)
+        update_data["password"] = pwd_context.hash(data.new_password)
         
     if update_data:
         await db.users.update_one({"username": data.username}, {"$set": update_data})
