@@ -5,7 +5,7 @@ import axios from 'axios';
 
 // นำเข้า Components และ Pages
 import Navbar from './components/Navbar';
-import Footer from './components/Footer'; // [NEW] นำเข้า Footer (PB-13)
+import Footer from './components/Footer'; 
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -13,8 +13,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import WebcamCapture from './pages/WebcamCapture';
 import UserManagement from './pages/UserManagement'; 
 import SystemConfig from './pages/SystemConfig'; 
-import Profile from './pages/Profile'; // [NEW] นำเข้าหน้า Profile (PB-14)
-import History from './pages/History'; // เพิ่มบรรทัดนี้ลงไปตรงกลุ่ม import pages
+import Profile from './pages/Profile'; 
+
+// 👇 [NEW] นำเข้าหน้าประวัติ และหน้ากราฟสถิติ
+import History from './pages/History'; // (PB-15)
+import Dashboard from './pages/Dashboard'; // (PB-16)
+
 import './styles/App.css'; 
 
 function App() {
@@ -57,23 +61,28 @@ function App() {
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLoginSuccess={setUser} />} />
             <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
             
-            {/* หน้า Dashboard หลัก (แยกตาม Role) */}
+            {/* 🚨 [UPDATED] หน้า Dashboard หลัก (แสดงสถิติกราฟ หรือ Admin) */}
             <Route path="/dashboard" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> : 
+              <Dashboard user={user} /> /* 👈 เรียกหน้ากราฟสถิติ PB-16 ตรงนี้ */
+            } />
+
+            {/* 🚨 [NEW] หน้ากล้องตรวจจับ (ย้ายมาจาก /dashboard เดิม) */}
+            <Route path="/camera" element={
+              !user ? <Navigate to="/login" /> : 
               <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px", backgroundColor: "#e8f5e9", textAlign: "center" }}>
-                <h2 style={{ color: "green" }}>🚗 Driver Dashboard</h2>
-                <p>ยินดีต้อนรับ, {user.username}!</p>
+                <h2 style={{ color: "green" }}>🚗 Driver Camera</h2>
+                <p>ยินดีต้อนรับ, {user.username}! (กรุณาเปิดกล้องเพื่อเริ่มตรวจจับ)</p>
                 <div style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
                    <WebcamCapture user={user} />
                 </div>
               </div>
             } />
 
-            {/* หน้าประวัติการใช้งาน (Placeholder สำหรับ PB ถัดไป) */}
+            {/* 🚨 [UPDATED] หน้าประวัติการใช้งาน (PB-15) */}
             <Route path="/history" element={
-              !user ? <Navigate to="/login" /> : 
-              <History user={user} />
+              !user ? <Navigate to="/login" /> : <History user={user} />
             } />
 
             {/* หน้าข้อมูลส่วนตัว Profile (PB-14) */}

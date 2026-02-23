@@ -21,7 +21,10 @@ function Navbar({ user, onLogout, status }) {
             🚗 Drowsiness AI
           </Link>
         </h2>
-        <small style={{ color: status.includes("✅") ? '#2ecc71' : '#e74c3c' }}>{status}</small>
+        {/* ป้องกัน Error กรณี status ไม่มีค่า */}
+        <small style={{ color: status?.includes("✅") ? '#2ecc71' : '#e74c3c' }}>
+          {status || "✅ ระบบพร้อมใช้งาน"}
+        </small>
       </div>
 
       {/* เมนูด้านขวา */}
@@ -35,17 +38,16 @@ function Navbar({ user, onLogout, status }) {
             <Link to="/register" style={registerBtnStyle}>📝 สมัครสมาชิก</Link>
           </>
         ) : (
-          
-        /* เงื่อนไข: ถ้าล็อกอินแล้ว */
+          /* เงื่อนไข: ถ้าล็อกอินแล้ว */
           <>
             <span style={{ color: '#f39c12', fontWeight: 'bold', marginRight: '10px' }}>
               👤 {user.username}
             </span>
             
-            <Link to="/dashboard" style={linkStyle}>🎥 กล้องตรวจจับ</Link>
+            {/* [UPDATED] เพิ่มลิงก์หน้า Dashboard กราฟสถิติ และเปลี่ยน path กล้อง */}
+            <Link to="/dashboard" style={linkStyle}>📊 สถิติภาพรวม</Link>
+            <Link to="/camera" style={linkStyle}>🎥 กล้องตรวจจับ</Link>
             <Link to="/history" style={linkStyle}>📁 ประวัติของฉัน</Link>
-            
-            {/* [UPDATED] ลิงก์ไปหน้า Profile */}
             <Link to="/profile" style={linkStyle}>👤 ข้อมูลส่วนตัว</Link>
             
             <button onClick={onLogout} style={logoutBtnStyle}>
