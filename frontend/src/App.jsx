@@ -1,34 +1,30 @@
-// --- frontend/src/App.jsx ---
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 
 // นำเข้า Components และ Pages
 import Navbar from './components/Navbar';
+import Footer from './components/Footer'; // [NEW] นำเข้า Footer
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminDashboard from './pages/AdminDashboard';
 import WebcamCapture from './pages/WebcamCapture';
-import UserManagement from './pages/UserManagement'; // (PB-18)
-import SystemConfig from './pages/SystemConfig'; // นำเข้าหน้าตั้งค่าระบบ (PB-19)
+import UserManagement from './pages/UserManagement'; 
+import SystemConfig from './pages/SystemConfig'; 
 
 import './styles/App.css'; 
 
 function App() {
   const [status, setStatus] = useState("กำลังตรวจสอบ...");
-  
-  // สร้างตัวแปร user เพื่อเก็บข้อมูลคนที่ล็อกอิน
   const [user, setUser] = useState(null); 
 
   useEffect(() => {
-    // 1. ดึงข้อมูล User จาก LocalStorage (ถ้ามี) จะได้ไม่ต้องล็อกอินใหม่
     const savedUser = localStorage.getItem('drowsiness_user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
 
-    // 2. เช็กสถานะ Backend
     axios.get('http://127.0.0.1:8000/')
       .then(res => setStatus("✅ " + res.data.message))
       .catch(() => setStatus("❌ เชื่อมต่อ Backend ไม่ได้"));
@@ -36,25 +32,24 @@ function App() {
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('drowsiness_user'); // ล้างข้อมูลตอนกดออกจากระบบ
+    localStorage.removeItem('drowsiness_user'); 
   };
 
   return (
     <Router>
-      <div style={{ fontFamily: 'Arial' }}>
-        {/* แถบเมนูด้านบน */}
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: 'Arial' }}>
+        
+        {/* [PB-13] แถบเมนูด้านบน */}
         <Navbar user={user} onLogout={handleLogout} status={status} />
         
         {/* พื้นที่แสดงผลหน้าต่างๆ */}
-        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ flex: 1, padding: '20px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
           <Routes>
             <Route path="/" element={<Welcome />} />
             
-            {/* ระบบล็อกอิน/สมัครสมาชิก */}
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLoginSuccess={setUser} />} />
             <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
             
-            {/* หน้า Dashboard หลัก (แยกตาม Role) */}
             <Route path="/dashboard" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> : 
@@ -67,14 +62,30 @@ function App() {
               </div>
             } />
 
-            {/* หน้าจัดการผู้ใช้ (Admin เท่านั้นเข้าได้) */}
+            {/* --- [NEW] หน้า Placeholder สำรองไว้สำหรับเมนูใหม่ --- */}
+            <Route path="/history" element={
+              !user ? <Navigate to="/login" /> : 
+              <div style={{ textAlign: "center", padding: "50px" }}>
+                <h2>📁 ประวัติของฉัน (Coming Soon)</h2>
+                <p>หน้านี้จะถูกพัฒนาใน PB ถัดๆ ไปครับ</p>
+              </div>
+            } />
+            
+            <Route path="/settings" element={
+              !user ? <Navigate to="/login" /> : 
+              <div style={{ textAlign: "center", padding: "50px" }}>
+                <h2>⚙️ ตั้งค่า (Coming Soon)</h2>
+                <p>หน้านี้จะถูกพัฒนาใน PB ถัดๆ ไปครับ</p>
+              </div>
+            } />
+            {/* ---------------------------------------------------- */}
+
             <Route path="/admin/users" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <UserManagement /> : 
               <Navigate to="/dashboard" />
             } />
 
-            {/* หน้าตั้งค่าระบบ AI (Admin เท่านั้นเข้าได้) */}
             <Route path="/admin/config" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <SystemConfig /> : 
@@ -83,6 +94,10 @@ function App() {
 
           </Routes>
         </div>
+
+        {/* [PB-13] ส่วนท้ายของเว็บ */}
+        <Footer />
+        
       </div>
     </Router>
   );

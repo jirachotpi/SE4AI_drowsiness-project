@@ -1,38 +1,87 @@
 // --- frontend/src/components/Navbar.jsx ---
-import { Link, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 function Navbar({ user, onLogout, status }) {
-    const navigate = useNavigate();
+  return (
+    <nav style={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      padding: '15px 30px', 
+      backgroundColor: '#2c3e50', 
+      color: 'white',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+    }}>
+      
+      {/* โลโก้ด้านซ้าย */}
+      <div>
+        <h2 style={{ margin: 0 }}>
+          <Link to={user ? "/dashboard" : "/"} style={{ color: 'white', textDecoration: 'none' }}>
+            🚗 Drowsiness AI
+          </Link>
+        </h2>
+        <small style={{ color: status.includes("✅") ? '#2ecc71' : '#e74c3c' }}>{status}</small>
+      </div>
 
-    const handleLogoutClick = () => {
-        onLogout();
-        navigate('/'); // ล็อกเอาท์แล้วกลับหน้าแรก
-    };
-
-    return (
-        <nav style={{ padding: '15px 30px', background: '#1a1a1a', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #3498db' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <Link to="/" style={{ color: 'white', textDecoration: 'none', fontSize: '1.2rem', fontWeight: 'bold' }}>🚗 SE4AI</Link>
-                <span style={{ fontSize: '0.8rem', color: '#888', background: '#333', padding: '3px 8px', borderRadius: '10px' }}>{status}</span>
-            </div>
+      {/* เมนูด้านขวา */}
+      <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+        
+        {/* เงื่อนไข: ถ้ายังไม่ล็อกอิน */}
+        {!user ? (
+          <>
+            <Link to="/" style={linkStyle}>🏠 หน้าแรก</Link>
+            <Link to="/login" style={linkStyle}>🔑 เข้าสู่ระบบ</Link>
+            <Link to="/register" style={registerBtnStyle}>📝 สมัครสมาชิก</Link>
+          </>
+        ) : (
+          
+        /* เงื่อนไข: ถ้าล็อกอินแล้ว */
+          <>
+            <span style={{ color: '#f39c12', fontWeight: 'bold', marginRight: '10px' }}>
+              👤 {user.username}
+            </span>
             
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                {!user ? (
-                    <>
-                        <Link to="/login" style={{ color: '#ecf0f1', textDecoration: 'none' }}>Login</Link>
-                        <Link to="/register" style={{ color: '#ecf0f1', textDecoration: 'none' }}>Register</Link>
-                    </>
-                ) : (
-                    <>
-                        <span style={{ color: '#2ecc71' }}>👤 {user.username} ({user.role})</span>
-                        <Link to="/dashboard" style={{ color: '#ecf0f1', textDecoration: 'none' }}>Dashboard</Link>
-                        <button onClick={handleLogoutClick} style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '8px 15px', cursor: 'pointer', borderRadius: '5px' }}>
-                            Logout
-                        </button>
-                    </>
-                )}
-            </div>
-        </nav>
-    );
+            <Link to="/dashboard" style={linkStyle}>🎥 กล้องตรวจจับ</Link>
+            <Link to="/history" style={linkStyle}>📁 ประวัติของฉัน</Link>
+            <Link to="/settings" style={linkStyle}>⚙️ ตั้งค่า</Link>
+            
+            <button onClick={onLogout} style={logoutBtnStyle}>
+              🚪 ออกจากระบบ
+            </button>
+          </>
+        )}
+      </div>
+    </nav>
+  );
 }
+
+// สไตล์ปุ่มและลิงก์ต่างๆ เพื่อความสวยงาม
+const linkStyle = {
+  color: 'white',
+  textDecoration: 'none',
+  fontSize: '16px',
+  transition: 'color 0.3s'
+};
+
+const registerBtnStyle = {
+  backgroundColor: '#3498db',
+  color: 'white',
+  textDecoration: 'none',
+  padding: '8px 15px',
+  borderRadius: '5px',
+  fontWeight: 'bold'
+};
+
+const logoutBtnStyle = {
+  backgroundColor: '#e74c3c',
+  color: 'white',
+  border: 'none',
+  padding: '8px 15px',
+  borderRadius: '5px',
+  cursor: 'pointer',
+  fontWeight: 'bold',
+  fontSize: '16px'
+};
+
 export default Navbar;
