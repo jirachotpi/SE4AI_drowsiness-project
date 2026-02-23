@@ -44,7 +44,9 @@ function Navbar({ user, onLogout, status }) {
             
             <Link to="/dashboard" style={linkStyle}>🎥 กล้องตรวจจับ</Link>
             <Link to="/history" style={linkStyle}>📁 ประวัติของฉัน</Link>
-            <Link to="/settings" style={linkStyle}>⚙️ ตั้งค่า</Link>
+            
+            {/* [UPDATED] ลิงก์ไปหน้า Profile */}
+            <Link to="/profile" style={linkStyle}>👤 ข้อมูลส่วนตัว</Link>
             
             <button onClick={onLogout} style={logoutBtnStyle}>
               🚪 ออกจากระบบ
