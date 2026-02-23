@@ -1,33 +1,30 @@
+// --- frontend/src/pages/WebcamCapture.jsx ---
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
 
-// ==========================================
-// 1. ส่วนตั้งค่าระบบ (CONFIGURATION)
-// ==========================================
-const CONFIG = {
-  INTERVAL_MS: 200,          // ความถี่ในการเช็ค (ms)
-  THRESH_LONG_BLINK: 0.4,    // สีเหลือง: ตาปิดเกิน 0.4 วิ
-  THRESH_MICROSLEEP: 1.0,    // สีส้ม: ตาปิดเกิน 1.0 วิ (วูบ)
-  THRESH_DEEP_SLEEP: 2.0,    // สีแดง: ตาปิดเกิน 2.0 วิ (หลับใน)
-  THRESH_STARING: 8.0,       // สีแดง: เหม่อลอย/ตาค้างเกิน 8 วิ
-  THRESH_FREQ_COUNT: 5,      // สีแดง: วูบครบ 5 ครั้ง
-  COOLDOWN_MS: 60000,        // เวลา reset นับจำนวนวูบ (1 นาที)
-  RECOVERY_TIME: 3.0,        // เวลาที่ต้องลืมตาต่อเนื่องเพื่อให้หายง่วง (3 วิ)
-  WARNING_DURATION: 1000,    // ความยาวเสียงเตือนสีส้ม
-  
-  // --- เส้นทางไฟล์เสียง ---
-  PATH_WARNING_SOUND: "/Orange_alarm.mp3", 
-  PATH_DANGER_SOUND: "/Red_alarm.mp3"
-};
-
 function WebcamCapture({ user }) {
   // ==========================================
-  // 2. ตัวแปรและ State (VARIABLES)
+  // 1. ตัวแปรและ State (VARIABLES)
   // ==========================================
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   
+  // 👇 [NEW] สร้าง State สำหรับเก็บค่า Config ที่ดึงจากระบบ
+  const [sysConfig, setSysConfig] = useState({
+    INTERVAL_MS: 200,
+    THRESH_LONG_BLINK: 0.4,
+    THRESH_MICROSLEEP: 1.0, // เวลาวูบ (ค่าเริ่มต้น)
+    THRESH_DEEP_SLEEP: 2.0, // เวลาหลับใน (ค่าเริ่มต้น)
+    THRESH_STARING: 8.0,
+    THRESH_FREQ_COUNT: 5,
+    COOLDOWN_MS: 60000,
+    RECOVERY_TIME: 3.0,
+    WARNING_DURATION: 1000,
+    PATH_WARNING_SOUND: "/Orange_alarm.mp3", 
+    PATH_DANGER_SOUND: "/Red_alarm.mp3"
+  });
+
   // UI State
   const [statusText, setStatusText] = useState("รอเริ่มระบบ...");
   const [alertColor, setAlertColor] = useState("gray"); 
@@ -49,24 +46,39 @@ function WebcamCapture({ user }) {
     isPlayingWarning: false
   });
 
-  // 👇 [NEW] ตัวช่วยจำค่าสำหรับ Log (เพิ่มใหม่)
-  const latestEarRef = useRef(0.0);       // จำค่า EAR ล่าสุดเสมอ
-  const eventStartTimeRef = useRef(null); // จำเวลาที่เริ่มง่วง (Start Time)
-  const isLoggingRef = useRef(false);     // จำสถานะว่า "กำลังเกิดเหตุ" อยู่ไหม
+  const latestEarRef = useRef(0.0);       
+  const eventStartTimeRef = useRef(null); 
+  const isLoggingRef = useRef(false);     
+  const eventEarRef = useRef(0.0);
+  // 👇 [NEW] ดึงค่าตั้งค่าจาก Backend ทันทีที่เปิดหน้ากล้อง
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await axios.get("http://127.0.0.1:8000/api/admin/config");
+        setSysConfig(prev => ({
+          ...prev,
+          THRESH_MICROSLEEP: res.data.drowsy_time, // อัปเดตเวลาวูบตามที่แอดมินตั้ง
+          THRESH_DEEP_SLEEP: res.data.sleep_time   // อัปเดตเวลาหลับในตามที่แอดมินตั้ง
+        }));
+        console.log("✅ โหลดการตั้งค่าจากแอดมินสำเร็จ:", res.data);
+      } catch (err) {
+        console.error("❌ ไม่สามารถดึงการตั้งค่าได้ ใช้ค่าเริ่มต้นแทน", err);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // ==========================================
-  // [NEW] ฟังก์ชันบันทึก LOG (แก้ใหม่ให้รับ Duration)
+  // [NEW] ฟังก์ชันบันทึก LOG
   // ==========================================
   const saveLog = async (eventType, duration, ear) => {
     try {
       const username = user ? user.username : "Guest";
-      
-      // ส่งข้อมูลไปที่ Backend
       await axios.post("http://127.0.0.1:8000/api/logs", {
         user_id: username,
         event_type: eventType,
-        ear_value: ear,        // ✅ ส่งค่าจริง
-        duration_ms: duration  // ✅ ส่งระยะเวลาจริง
+        ear_value: ear,        
+        duration_ms: duration  
       });
       console.log(`📝 บันทึก: ${eventType} (${duration}ms) EAR:${ear}`);
     } catch (err) {
@@ -78,7 +90,6 @@ function WebcamCapture({ user }) {
   // 3. ฟังก์ชันรีเซ็ตระบบ
   // ==========================================
   const resetSystem = () => {
-    // แก้ไข: เช็ค null ก่อนเรียกใช้
     if (warningAudioRef.current) {
         warningAudioRef.current.pause();
         warningAudioRef.current.currentTime = 0;
@@ -98,7 +109,6 @@ function WebcamCapture({ user }) {
       isPlayingWarning: false
     };
     
-    // Reset Log refs
     eventStartTimeRef.current = null;
     isLoggingRef.current = false;
     latestEarRef.current = 0.0;
@@ -154,7 +164,7 @@ function WebcamCapture({ user }) {
                     warningAudioRef.current.currentTime = 0;
                 }
                 logicState.current.isPlayingWarning = false; 
-            }, CONFIG.WARNING_DURATION);
+            }, sysConfig.WARNING_DURATION);
         }
     }
   };
@@ -175,11 +185,7 @@ function WebcamCapture({ user }) {
     ctx.drawImage(video, 0, 0);
 
     tempCanvas.toBlob(async (blob) => {
-      // ✅ แก้ไข: ป้องกัน Error parameter 2 is not of type 'Blob'
-      if (!blob) {
-        console.warn("⚠️ ไม่สามารถสร้าง Blob ได้ในเฟรมนี้");
-        return; 
-      }
+      if (!blob) return;
 
       const formData = new FormData();
       formData.append("file", blob, "frame.jpg");
@@ -198,7 +204,7 @@ function WebcamCapture({ user }) {
   };
 
   // ==========================================
-  // 6. สมองของระบบ: วิเคราะห์ความง่วง
+  // 6. สมองของระบบ: วิเคราะห์ความง่วง (ใช้ค่าจาก sysConfig)
   // ==========================================
   const analyzeFatigue = (data) => {
     if (data.ear) {
@@ -217,7 +223,7 @@ function WebcamCapture({ user }) {
         return;
     }
 
-    if (NOW - state.lastDrowsyEventTime > CONFIG.COOLDOWN_MS) {
+    if (NOW - state.lastDrowsyEventTime > sysConfig.COOLDOWN_MS) {
         state.drowsyEventCount = 0;
     }
 
@@ -228,39 +234,40 @@ function WebcamCapture({ user }) {
     } else {
         state.consecutiveOpenFrames += 1;
         
-        const openDuration = state.consecutiveOpenFrames * (CONFIG.INTERVAL_MS / 1000);
-        if (openDuration >= CONFIG.RECOVERY_TIME) {
+        const openDuration = state.consecutiveOpenFrames * (sysConfig.INTERVAL_MS / 1000);
+        if (openDuration >= sysConfig.RECOVERY_TIME) {
             state.drowsyEventCount = 0; 
         }
 
-        const closedDuration = state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000);
-        if (closedDuration >= CONFIG.THRESH_MICROSLEEP) {
+        const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
+        // ✅ ใช้ค่า THRESH_MICROSLEEP จากฐานข้อมูล
+        if (closedDuration >= sysConfig.THRESH_MICROSLEEP) {
              state.drowsyEventCount += 1; 
              state.lastDrowsyEventTime = NOW;
         }
         state.consecutiveClosedFrames = 0;
     }
 
-    const currentClosedSeconds = (state.consecutiveClosedFrames * (CONFIG.INTERVAL_MS / 1000));
+    const currentClosedSeconds = (state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
 
-    // 🔴 โซนสีแดง
-    if (currentClosedSeconds >= CONFIG.THRESH_DEEP_SLEEP || 
-        stareSeconds >= CONFIG.THRESH_STARING || 
-        state.drowsyEventCount >= CONFIG.THRESH_FREQ_COUNT) {
+    // 🔴 โซนสีแดง (ใช้ค่า THRESH_DEEP_SLEEP จากฐานข้อมูล)
+    if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || 
+        stareSeconds >= sysConfig.THRESH_STARING || 
+        state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
         
         setAlertColor("red");
         setStatusText("🚨 อันตราย! พักเดี๋ยวนี้");
         handleSound("danger"); 
     } 
-    // 🟠 โซนสีส้ม
-    else if (currentClosedSeconds >= CONFIG.THRESH_MICROSLEEP) {
+    // 🟠 โซนสีส้ม (ใช้ค่า THRESH_MICROSLEEP จากฐานข้อมูล)
+    else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
         setAlertColor("orange");
         setStatusText(`⚠️ ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("warning"); 
     }
     // 🟡 โซนสีเหลือง
-    else if (currentClosedSeconds >= CONFIG.THRESH_LONG_BLINK) {
+    else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
         setAlertColor("yellow");
         setStatusText(`ง่วงนอน... (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("stop"); 
@@ -312,17 +319,20 @@ function WebcamCapture({ user }) {
   useEffect(() => {
     let interval;
     if (isStreaming) {
-      interval = setInterval(captureAndDetect, CONFIG.INTERVAL_MS);
+      interval = setInterval(captureAndDetect, sysConfig.INTERVAL_MS);
     }
     return () => clearInterval(interval);
-  }, [isStreaming, alertColor, isMuted]); 
+  }, [isStreaming, alertColor, isMuted, sysConfig]); 
 
-  // 👇 [NEW] Effect สำหรับบันทึก Log
+  // Effect สำหรับบันทึก Log
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
         eventStartTimeRef.current = Date.now(); 
         isLoggingRef.current = true;            
+        
+        // 👇 [เพิ่มโค้ดตรงนี้] ล็อกค่า EAR ณ วินาทีที่ตาปิด (ค่าต่ำๆ) เอาไว้เลย
+        eventEarRef.current = latestEarRef.current; 
       }
     } 
     else if (alertColor === "green") {
@@ -330,7 +340,10 @@ function WebcamCapture({ user }) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
         const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
-        saveLog(finalType, duration, latestEarRef.current);
+        
+        // 👇 [แก้ไขตรงนี้] เปลี่ยนจาก latestEarRef.current เป็น eventEarRef.current
+        saveLog(finalType, duration, eventEarRef.current);
+        
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
       }
@@ -343,8 +356,8 @@ function WebcamCapture({ user }) {
   return (
     <div style={{ textAlign: "center", padding: "20px", fontFamily: "sans-serif" }}>
       
-      <audio ref={warningAudioRef} src={CONFIG.PATH_WARNING_SOUND} preload="auto" />
-      <audio ref={dangerAudioRef} src={CONFIG.PATH_DANGER_SOUND} preload="auto" loop />
+      <audio ref={warningAudioRef} src={sysConfig.PATH_WARNING_SOUND} preload="auto" />
+      <audio ref={dangerAudioRef} src={sysConfig.PATH_DANGER_SOUND} preload="auto" loop />
 
       <style>
         {`

@@ -14,7 +14,7 @@ import WebcamCapture from './pages/WebcamCapture';
 import UserManagement from './pages/UserManagement'; 
 import SystemConfig from './pages/SystemConfig'; 
 import Profile from './pages/Profile'; // [NEW] นำเข้าหน้า Profile (PB-14)
-
+import History from './pages/History'; // เพิ่มบรรทัดนี้ลงไปตรงกลุ่ม import pages
 import './styles/App.css'; 
 
 function App() {
@@ -73,10 +73,7 @@ function App() {
             {/* หน้าประวัติการใช้งาน (Placeholder สำหรับ PB ถัดไป) */}
             <Route path="/history" element={
               !user ? <Navigate to="/login" /> : 
-              <div style={{ textAlign: "center", padding: "50px" }}>
-                <h2>📁 ประวัติของฉัน (Coming Soon)</h2>
-                <p>หน้านี้จะถูกพัฒนาใน PB ถัดๆ ไปครับ</p>
-              </div>
+              <History user={user} />
             } />
 
             {/* หน้าข้อมูลส่วนตัว Profile (PB-14) */}

@@ -23,7 +23,7 @@ async def register(user: UserRegister):
     if existing_user:
         raise HTTPException(status_code=400, detail="ชื่อผู้ใช้นี้มีคนใช้แล้ว")
 
-    # 2. เช็ก Email ซ้ำ (เพิ่มใหม่ ป้องกันสมัครอีเมลซ้ำ)
+    # 2. เช็ก Email ซ้ำ
     if user.email:
         existing_email = await db.users.find_one({"email": user.email})
         if existing_email:
@@ -35,7 +35,8 @@ async def register(user: UserRegister):
         "username": user.username,
         "email": user.email,
         "password": hashed_password,
-        "role": "user"
+        "role": "user",
+        "is_suspended": False # ✅ [แก้ไขแล้ว] ใช้ is_suspended: False แทนสถานะ active
     }
     await db.users.insert_one(new_user)
     return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
@@ -45,6 +46,10 @@ async def login(user: UserLogin):
     db_user = await db.users.find_one({"username": user.username})
     if not db_user:
         raise HTTPException(status_code=400, detail="ไม่พบชื่อผู้ใช้นี้")
+
+    # 🚨 ✅ [แก้ไขแล้ว] เช็กสถานะบัญชีจาก is_suspended ให้ตรงกับ Database
+    if db_user.get("is_suspended") is True:
+        raise HTTPException(status_code=403, detail="บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ")
 
     # ตรวจสอบรหัสผ่านที่ถูกเข้ารหัส
     if not pwd_context.verify(user.password, db_user["password"]):
@@ -85,11 +90,11 @@ async def update_my_profile(data: UserUpdateModel):
         if not data.current_password:
             raise HTTPException(status_code=400, detail="กรุณากรอกรหัสผ่านปัจจุบัน")
             
-        # เช็กรหัสผ่านปัจจุบันด้วย pwd_context.verify (แก้ไขให้เช็กถูกต้อง)
+        # เช็กรหัสผ่านปัจจุบันด้วย pwd_context.verify 
         if not pwd_context.verify(data.current_password, user.get("password")):
             raise HTTPException(status_code=400, detail="รหัสผ่านปัจจุบันไม่ถูกต้อง")
         
-        # เข้ารหัสผ่านใหม่ก่อนบันทึกลง Database (แก้ไขให้เข้ารหัสก่อนบันทึก)
+        # เข้ารหัสผ่านใหม่ก่อนบันทึกลง Database 
         update_data["password"] = pwd_context.hash(data.new_password)
         
     if update_data:
