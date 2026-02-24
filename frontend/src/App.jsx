@@ -14,30 +14,31 @@ import WebcamCapture from './pages/WebcamCapture';
 import UserManagement from './pages/UserManagement'; 
 import SystemConfig from './pages/SystemConfig'; 
 import Profile from './pages/Profile'; 
-
-// 👇 [NEW] นำเข้าหน้าประวัติ และหน้ากราฟสถิติ
-import History from './pages/History'; // (PB-15)
-import Dashboard from './pages/Dashboard'; // (PB-16)
-
-import './styles/App.css'; 
+import History from './pages/History'; 
+import Dashboard from './pages/Dashboard'; 
 
 function App() {
-  const [status, setStatus] = useState("กำลังตรวจสอบ...");
-  
-  // สร้างตัวแปร user เพื่อเก็บข้อมูลคนที่ล็อกอิน
-  const [user, setUser] = useState(null); 
-
-  useEffect(() => {
-    // 1. ดึงข้อมูล User จาก LocalStorage (ถ้ามี) จะได้ไม่ต้องล็อกอินใหม่
+  // 1. [BEST PRACTICE] ใช้ Lazy Initialization ดึงข้อมูลจาก LocalStorage ทันที
+  const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('drowsiness_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  
+  const [status, setStatus] = useState("กำลังตรวจสอบ...");
 
-    // 2. เช็กสถานะ Backend
-    axios.get('http://127.0.0.1:8000/')
-      .then(res => setStatus("✅ " + res.data.message))
-      .catch(() => setStatus("❌ เชื่อมต่อ Backend ไม่ได้"));
+  // 2. useEffect เหลือแค่ทำหน้าที่เช็กสถานะ Backend อย่างเดียว
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await axios.get('http://127.0.0.1:8000/');
+        // 👇 [แก้ไขตรงนี้] เติม ✅ เข้าไปด้านหน้าข้อความ เพื่อให้ Navbar รู้ว่าเป็นสีเขียว
+        setStatus(` ${res.data.message || "ระบบพร้อมใช้งาน"}`);
+      } catch (error) {
+        // 👇 ถ้าเชื่อมต่อไม่ได้ ให้ขึ้น ❌ แทน
+        setStatus(" เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+      }
+    };
+    checkStatus();
   }, []);
 
   const handleLogout = () => {
@@ -47,13 +48,14 @@ function App() {
 
   return (
     <Router>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: 'Arial' }}>
+      {/* 3. [TAILWIND] โครงสร้างหลักของเว็บ (ลบ Inline Style ออก) */}
+      <div className="flex flex-col min-h-screen bg-slate-50 font-sans text-slate-900">
         
         {/* แถบเมนูด้านบน */}
         <Navbar user={user} onLogout={handleLogout} status={status} />
         
-        {/* พื้นที่แสดงผลหน้าต่างๆ (กำหนดให้ขยายเต็มพื้นที่ที่เหลือ) */}
-        <div style={{ flex: 1, padding: '20px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        {/* พื้นที่แสดงผลหน้าต่างๆ */}
+        <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
           <Routes>
             <Route path="/" element={<Welcome />} />
             
@@ -61,43 +63,45 @@ function App() {
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLoginSuccess={setUser} />} />
             <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
             
-            {/* 🚨 [UPDATED] หน้า Dashboard หลัก (แสดงสถิติกราฟ หรือ Admin) */}
+            {/* หน้า Dashboard หลัก */}
             <Route path="/dashboard" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> : 
-              <Dashboard user={user} /> /* 👈 เรียกหน้ากราฟสถิติ PB-16 ตรงนี้ */
+              <Dashboard user={user} />
             } />
 
-            {/* 🚨 [NEW] หน้ากล้องตรวจจับ (ย้ายมาจาก /dashboard เดิม) */}
+            {/* หน้ากล้องตรวจจับ (เปลี่ยนสไตล์เป็น Modern คลีนๆ) */}
             <Route path="/camera" element={
               !user ? <Navigate to="/login" /> : 
-              <div style={{ padding: "20px", border: "2px solid green", borderRadius: "10px", backgroundColor: "#e8f5e9", textAlign: "center" }}>
-                <h2 style={{ color: "green" }}>🚗 Driver Camera</h2>
-                <p>ยินดีต้อนรับ, {user.username}! (กรุณาเปิดกล้องเพื่อเริ่มตรวจจับ)</p>
-                <div style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
+              <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 text-center w-full max-w-5xl mx-auto">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">ระบบกล้องวิเคราะห์ใบหน้า</h2>
+                <p className="text-slate-500 mb-8">
+                  ผู้ใช้งาน: <span className="font-semibold text-slate-700">{user.username}</span> (กรุณาเปิดกล้องเพื่อเริ่มการทำงาน)
+                </p>
+                <div className="flex justify-center w-full">
                    <WebcamCapture user={user} />
                 </div>
               </div>
             } />
 
-            {/* 🚨 [UPDATED] หน้าประวัติการใช้งาน (PB-15) */}
+            {/* หน้าประวัติการใช้งาน */}
             <Route path="/history" element={
               !user ? <Navigate to="/login" /> : <History user={user} />
             } />
 
-            {/* หน้าข้อมูลส่วนตัว Profile (PB-14) */}
+            {/* หน้าข้อมูลส่วนตัว Profile */}
             <Route path="/profile" element={
               !user ? <Navigate to="/login" /> : <Profile user={user} />
             } />
 
-            {/* หน้าจัดการผู้ใช้ (Admin เท่านั้นเข้าได้) */}
+            {/* หน้าจัดการผู้ใช้ (Admin) */}
             <Route path="/admin/users" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <UserManagement /> : 
               <Navigate to="/dashboard" />
             } />
 
-            {/* หน้าตั้งค่าระบบ AI (Admin เท่านั้นเข้าได้) */}
+            {/* หน้าตั้งค่าระบบ AI (Admin) */}
             <Route path="/admin/config" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <SystemConfig /> : 
@@ -105,9 +109,9 @@ function App() {
             } />
 
           </Routes>
-        </div>
+        </main>
 
-        {/* ส่วนท้ายของเว็บ Footer (PB-13) */}
+        {/* ส่วนท้ายของเว็บ */}
         <Footer />
         
       </div>

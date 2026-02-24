@@ -1,6 +1,7 @@
 // --- frontend/src/pages/WebcamCapture.jsx ---
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
 
 function WebcamCapture({ user }) {
   // ==========================================
@@ -10,12 +11,11 @@ function WebcamCapture({ user }) {
   const canvasRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   
-  // 👇 [NEW] สร้าง State สำหรับเก็บค่า Config ที่ดึงจากระบบ
   const [sysConfig, setSysConfig] = useState({
     INTERVAL_MS: 200,
     THRESH_LONG_BLINK: 0.4,
-    THRESH_MICROSLEEP: 1.0, // เวลาวูบ (ค่าเริ่มต้น)
-    THRESH_DEEP_SLEEP: 2.0, // เวลาหลับใน (ค่าเริ่มต้น)
+    THRESH_MICROSLEEP: 1.0,
+    THRESH_DEEP_SLEEP: 2.0,
     THRESH_STARING: 8.0,
     THRESH_FREQ_COUNT: 5,
     COOLDOWN_MS: 60000,
@@ -24,18 +24,20 @@ function WebcamCapture({ user }) {
     PATH_WARNING_SOUND: "/Orange_alarm.mp3", 
     PATH_DANGER_SOUND: "/Red_alarm.mp3"
   });
-
-  // UI State
-  const [statusText, setStatusText] = useState("รอเริ่มระบบ...");
+  
+  const [statusText, setStatusText] = useState("รอระบบเริ่มทำงาน...");
   const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
-  // Audio Refs
-  const warningAudioRef = useRef(null); 
+  // ระบบจับเวลา (Timer) และนับจำนวนกะพริบตา (Blink Counter)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [blinkCount, setBlinkCount] = useState(0);
+  const prevEyeClosed = useRef(false);
+
+  const warningAudioRef = useRef(null);
   const dangerAudioRef = useRef(null); 
   const [isMuted, setIsMuted] = useState(false);
 
-  // Logic State
   const logicState = useRef({
     consecutiveClosedFrames: 0,
     consecutiveOpenFrames: 0,
@@ -45,32 +47,52 @@ function WebcamCapture({ user }) {
     isPlayingDanger: false,
     isPlayingWarning: false
   });
-
+  
   const latestEarRef = useRef(0.0);       
   const eventStartTimeRef = useRef(null); 
   const isLoggingRef = useRef(false);     
   const eventEarRef = useRef(0.0);
-  // 👇 [NEW] ดึงค่าตั้งค่าจาก Backend ทันทีที่เปิดหน้ากล้อง
+
+  // ==========================================
+  // 2. ฟังก์ชันหลักของระบบตรวจจับ
+  // ==========================================
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const res = await axios.get("http://127.0.0.1:8000/api/admin/config");
         setSysConfig(prev => ({
           ...prev,
-          THRESH_MICROSLEEP: res.data.drowsy_time, // อัปเดตเวลาวูบตามที่แอดมินตั้ง
-          THRESH_DEEP_SLEEP: res.data.sleep_time   // อัปเดตเวลาหลับในตามที่แอดมินตั้ง
+          THRESH_MICROSLEEP: res.data.drowsy_time,
+          THRESH_DEEP_SLEEP: res.data.sleep_time
         }));
-        console.log("✅ โหลดการตั้งค่าจากแอดมินสำเร็จ:", res.data);
       } catch (err) {
-        console.error("❌ ไม่สามารถดึงการตั้งค่าได้ ใช้ค่าเริ่มต้นแทน", err);
+        console.error("ไม่สามารถดึงการตั้งค่าได้ ใช้ค่าเริ่มต้นแทน", err);
       }
     };
     fetchConfig();
   }, []);
 
-  // ==========================================
-  // [NEW] ฟังก์ชันบันทึก LOG
-  // ==========================================
+  // Effect สำหรับจับเวลาแบบ Real-time
+  useEffect(() => {
+    let interval;
+    if (isStreaming) {
+      interval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isStreaming]);
+
+  // ฟังก์ชันแปลงวินาทีเป็น HH:MM:SS
+  const formatTime = (totalSeconds) => {
+    const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
+
   const saveLog = async (eventType, duration, ear) => {
     try {
       const username = user ? user.username : "Guest";
@@ -80,15 +102,11 @@ function WebcamCapture({ user }) {
         ear_value: ear,        
         duration_ms: duration  
       });
-      console.log(`📝 บันทึก: ${eventType} (${duration}ms) EAR:${ear}`);
     } catch (err) {
-      console.error("❌ บันทึก Log ไม่สำเร็จ:", err);
+      console.error("บันทึก Log ไม่สำเร็จ:", err);
     }
   };
 
-  // ==========================================
-  // 3. ฟังก์ชันรีเซ็ตระบบ
-  // ==========================================
   const resetSystem = () => {
     if (warningAudioRef.current) {
         warningAudioRef.current.pause();
@@ -108,22 +126,22 @@ function WebcamCapture({ user }) {
       isPlayingDanger: false,
       isPlayingWarning: false
     };
-    
     eventStartTimeRef.current = null;
     isLoggingRef.current = false;
     latestEarRef.current = 0.0;
+    prevEyeClosed.current = false;
+
+    // รีเซ็ตตัวเลขเมื่อกดทำงานใหม่
+    setElapsedSeconds(0);
+    setBlinkCount(0);
 
     setStatusText("ระบบพร้อมทำงาน...");
     setAlertColor("green");
     setDebugInfo("ค่าทั้งหมดถูกรีเซตแล้ว");
   };
 
-  // ==========================================
-  // 4. ฟังก์ชันจัดการเสียง
-  // ==========================================
   const handleSound = (type) => {
-    if (isMuted) return; 
-
+    if (isMuted) return;
     if (type === "stop") {
         if (dangerAudioRef.current) {
             dangerAudioRef.current.pause();
@@ -169,12 +187,8 @@ function WebcamCapture({ user }) {
     }
   };
   
-  // ==========================================
-  // 5. ฟังก์ชันหลัก: จับภาพและวิเคราะห์
-  // ==========================================
   const captureAndDetect = async () => {
     if (!videoRef.current || !isStreaming) return;
-    
     const video = videoRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
@@ -183,33 +197,24 @@ function WebcamCapture({ user }) {
     tempCanvas.height = video.videoHeight;
     const ctx = tempCanvas.getContext("2d");
     ctx.drawImage(video, 0, 0);
-
     tempCanvas.toBlob(async (blob) => {
       if (!blob) return;
-
       const formData = new FormData();
       formData.append("file", blob, "frame.jpg");
 
       try {
         const res = await axios.post("http://127.0.0.1:8000/api/detect", formData);
         const data = res.data;
-        
         drawOverlay(data.face_box, data.ear);
         analyzeFatigue(data);
-
       } catch (err) {
         console.error("API Error:", err.response?.data || err.message);
       }
     }, "image/jpeg");
   };
 
-  // ==========================================
-  // 6. สมองของระบบ: วิเคราะห์ความง่วง (ใช้ค่าจาก sysConfig)
-  // ==========================================
   const analyzeFatigue = (data) => {
-    if (data.ear) {
-        latestEarRef.current = data.ear;
-    }
+    if (data.ear) latestEarRef.current = data.ear;
 
     const NOW = Date.now();
     const state = logicState.current;
@@ -223,6 +228,12 @@ function WebcamCapture({ user }) {
         return;
     }
 
+    // คำนวณจำนวนการกะพริบตา (Blink Counter)
+    if (!prevEyeClosed.current && data.is_eye_closed) {
+        setBlinkCount(prev => prev + 1);
+    }
+    prevEyeClosed.current = data.is_eye_closed || false;
+
     if (NOW - state.lastDrowsyEventTime > sysConfig.COOLDOWN_MS) {
         state.drowsyEventCount = 0;
     }
@@ -233,16 +244,11 @@ function WebcamCapture({ user }) {
         state.lastBlinkTime = NOW; 
     } else {
         state.consecutiveOpenFrames += 1;
-        
         const openDuration = state.consecutiveOpenFrames * (sysConfig.INTERVAL_MS / 1000);
-        if (openDuration >= sysConfig.RECOVERY_TIME) {
-            state.drowsyEventCount = 0; 
-        }
-
+        if (openDuration >= sysConfig.RECOVERY_TIME) state.drowsyEventCount = 0;
         const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
-        // ✅ ใช้ค่า THRESH_MICROSLEEP จากฐานข้อมูล
         if (closedDuration >= sysConfig.THRESH_MICROSLEEP) {
-             state.drowsyEventCount += 1; 
+             state.drowsyEventCount += 1;
              state.lastDrowsyEventTime = NOW;
         }
         state.consecutiveClosedFrames = 0;
@@ -250,41 +256,29 @@ function WebcamCapture({ user }) {
 
     const currentClosedSeconds = (state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
-
-    // 🔴 โซนสีแดง (ใช้ค่า THRESH_DEEP_SLEEP จากฐานข้อมูล)
+    
     if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || 
         stareSeconds >= sysConfig.THRESH_STARING || 
         state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
-        
         setAlertColor("red");
-        setStatusText("🚨 อันตราย! พักเดี๋ยวนี้");
+        setStatusText("อันตราย! พักเดี๋ยวนี้");
         handleSound("danger"); 
-    } 
-    // 🟠 โซนสีส้ม (ใช้ค่า THRESH_MICROSLEEP จากฐานข้อมูล)
-    else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
+    } else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
         setAlertColor("orange");
-        setStatusText(`⚠️ ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
+        setStatusText(`ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("warning"); 
-    }
-    // 🟡 โซนสีเหลือง
-    else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
+    } else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
         setAlertColor("yellow");
         setStatusText(`ง่วงนอน... (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("stop"); 
-    }
-    // 🟢 โซนสีเขียว
-    else {
+    } else {
         setAlertColor("green");
         setStatusText("ปกติ (ขับขี่ปลอดภัย)");
-        handleSound("stop"); 
+        handleSound("stop");
     }
-
-    setDebugInfo(`EAR: ${data.ear} | Stare: ${stareSeconds.toFixed(1)}s | Drowsy: ${state.drowsyEventCount}`);
+    setDebugInfo(`EAR: ${data.ear} | Stare: ${stareSeconds.toFixed(1)}s`);
   };
 
-  // ==========================================
-  // 7. ฟังก์ชันวาดกราฟิก
-  // ==========================================
   const drawOverlay = (box, ear) => {
     if (!canvasRef.current || !videoRef.current) return;
     const ctx = canvasRef.current.getContext("2d");
@@ -293,45 +287,42 @@ function WebcamCapture({ user }) {
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     canvasRef.current.width = video.videoWidth;
     canvasRef.current.height = video.videoHeight;
-
+    
     if (box) {
-        let color = "#00FF00"; 
-        if (alertColor === "red") color = "#FF0000";
-        else if (alertColor === "orange") color = "#FFA500";
-        else if (alertColor === "yellow") color = "#FFFF00";
+        let color = "#10b981"; // green
+        if (alertColor === "red") color = "#e11d48";
+        else if (alertColor === "orange") color = "#f97316";
+        else if (alertColor === "yellow") color = "#fbbf24";
+        else if (alertColor === "gray") color = "#94a3b8";
 
         ctx.strokeStyle = color;
         ctx.lineWidth = 4;
         ctx.strokeRect(box[0], box[1], box[2], box[3]);
         
         ctx.fillStyle = color;
-        ctx.fillRect(box[0], box[1] - 30, 100, 30);
+        ctx.beginPath();
+        ctx.roundRect(box[0], box[1] - 32, 110, 32, [6, 6, 0, 0]);
+        ctx.fill();
         
-        ctx.fillStyle = "black";
-        ctx.font = "bold 16px Arial";
-        ctx.fillText(`EAR: ${ear}`, box[0] + 5, box[1] - 10);
+        ctx.fillStyle = "white";
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(`EAR: ${ear}`, box[0] + 8, box[1] - 10);
     }
   };
 
-  // ==========================================
-  // 8. เริ่ม/หยุด Loop
-  // ==========================================
   useEffect(() => {
     let interval;
     if (isStreaming) {
       interval = setInterval(captureAndDetect, sysConfig.INTERVAL_MS);
     }
     return () => clearInterval(interval);
-  }, [isStreaming, alertColor, isMuted, sysConfig]); 
+  }, [isStreaming, alertColor, isMuted, sysConfig]);
 
-  // Effect สำหรับบันทึก Log
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
         eventStartTimeRef.current = Date.now(); 
         isLoggingRef.current = true;            
-        
-        // 👇 [เพิ่มโค้ดตรงนี้] ล็อกค่า EAR ณ วินาทีที่ตาปิด (ค่าต่ำๆ) เอาไว้เลย
         eventEarRef.current = latestEarRef.current; 
       }
     } 
@@ -340,79 +331,275 @@ function WebcamCapture({ user }) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
         const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
-        
-        // 👇 [แก้ไขตรงนี้] เปลี่ยนจาก latestEarRef.current เป็น eventEarRef.current
         saveLog(finalType, duration, eventEarRef.current);
-        
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
       }
     }
   }, [alertColor]);
 
+  const toggleCamera = () => {
+    if (!isStreaming) {
+      resetSystem();
+      setIsStreaming(true);
+      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then(stream => { if(videoRef.current) videoRef.current.srcObject = stream; })
+        .catch(err => {
+            console.error("Camera error:", err);
+            setIsStreaming(false);
+            setStatusText("ไม่สามารถเปิดกล้องได้");
+        });
+    } else {
+      setIsStreaming(false);
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      setStatusText("รอระบบเริ่มทำงาน...");
+      setAlertColor("gray");
+      setDebugInfo("");
+      handleSound("stop");
+    }
+  };
+
   // ==========================================
-  // 9. ส่วนแสดงผล (RENDER)
+  // 3. จัดการสไตล์ UI ตามสถานะ (Theme Light)
   // ==========================================
+  const getStatusConfig = () => {
+    switch (alertColor) {
+      case "red":
+        return {
+          color: "text-rose-600",
+          bg: "bg-rose-50",
+          border: "border-rose-500",
+          glow: "shadow-[0_0_20px_rgba(225,29,72,0.2)]",
+          animation: "animate-[pulse_0.5s_ease-in-out_infinite]",
+        };
+      case "orange":
+      case "yellow":
+        return {
+          color: "text-amber-500",
+          bg: "bg-amber-50",
+          border: "border-amber-400",
+          glow: "shadow-[0_0_20px_rgba(251,191,36,0.2)]",
+          animation: "animate-pulse",
+        };
+      case "green":
+        return {
+          color: "text-emerald-500",
+          bg: "bg-emerald-50",
+          border: "border-emerald-500/50",
+          glow: "shadow-[0_0_15px_rgba(16,185,129,0.1)]",
+          animation: "",
+        };
+      case "gray":
+      default:
+        return {
+          color: "text-gray-500",
+          bg: "bg-gray-100",
+          border: "border-gray-200",
+          glow: "",
+          animation: "",
+        };
+    }
+  };
+
+  const statusCfg = getStatusConfig();
+
+  const getParsedStats = () => {
+    const earMatch = debugInfo.match(/EAR:\s*([\d.]+)/);
+    const stareMatch = debugInfo.match(/Stare:\s*([\d.]+s)/);
+    return {
+      ear: earMatch ? earMatch[1] : "0.00",
+      stare: stareMatch ? stareMatch[1] : "0.0s"
+    };
+  };
+  const stats = getParsedStats();
+
   return (
-    <div style={{ textAlign: "center", padding: "20px", fontFamily: "sans-serif" }}>
+    <div className="w-full flex justify-center font-sans mt-8">
       
-      <audio ref={warningAudioRef} src={sysConfig.PATH_WARNING_SOUND} preload="auto" />
-      <audio ref={dangerAudioRef} src={sysConfig.PATH_DANGER_SOUND} preload="auto" loop />
+      {/* Container หลัก จัดการความกว้างสูงสุด */}
+      <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 px-4">
+        
+        {/* Audio Sources */}
+        <audio ref={warningAudioRef} src={sysConfig.PATH_WARNING_SOUND} preload="auto" />
+        <audio ref={dangerAudioRef} src={sysConfig.PATH_DANGER_SOUND} preload="auto" loop />
 
-      <style>
-        {`
-          @keyframes blink {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.02); background-color: darkred; }
-            100% { opacity: 1; transform: scale(1); }
-          }
-          .alert-box-red { animation: blink 0.5s infinite; }
-        `}
-      </style>
+        {/* =========================================
+            ฝั่งซ้าย: กล้อง AI (ขยายเต็มพื้นที่ flex-1 และคงสัดส่วน) 
+        ========================================= */}
+        <div className="flex-1 flex flex-col gap-4">
+          
+          {/* Status Banner */}
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={alertColor}
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`py-4 px-6 rounded-2xl border ${statusCfg.bg} ${statusCfg.border} ${statusCfg.glow} ${statusCfg.animation} flex items-center justify-center transition-colors duration-300 shadow-sm`}
+            >
+              <h2 className={`text-2xl font-bold tracking-wide ${statusCfg.color}`}>
+                {statusText}
+              </h2>
+            </motion.div>
+          </AnimatePresence>
 
-      <h2>ระบบตรวจจับความง่วงผู้ขับขี่ (Driver Drowsiness Detection)</h2>
-      
-      <div 
-        className={alertColor === "red" ? "alert-box-red" : ""}
-        style={{ 
-          padding: "20px", 
-          backgroundColor: alertColor === "gray" ? "#ddd" : alertColor,
-          color: alertColor === "yellow" || alertColor === "gray" ? "black" : "white", 
-          borderRadius: "15px", 
-          marginBottom: "20px",
-          border: alertColor === "red" ? "5px solid #ff0000" : "none"
-      }}>
-          <h1 style={{ margin: 0, fontSize: "2.5rem" }}>{statusText}</h1>
-          <p style={{ margin: "10px 0 0 0", opacity: 0.8 }}>{debugInfo}</p>
-      </div>
+          {/* Camera Box (ตั้งค่า Aspect Ratio เพื่อไม่ให้ยาวเกินไป) */}
+          <div className={`relative w-full aspect-[4/3] rounded-3xl bg-gray-50 border-2 overflow-hidden transition-all duration-300 shadow-sm flex items-center justify-center ${isStreaming ? statusCfg.border : 'border-gray-200'}`}>
+            
+            {isStreaming && (
+              <>
+                <div className="absolute bottom-4 left-4 font-mono text-xs text-gray-500 bg-white/90 px-3 py-1.5 rounded-md backdrop-blur-sm z-10 uppercase border border-gray-200 shadow-sm">
+                  SYS.ON // FPS: OPTIMAL // LIVE
+                </div>
+              </>
+            )}
 
-      <div style={{ position: "relative", width: "640px", height: "480px", margin: "0 auto", border: "5px solid #333", borderRadius: "10px", overflow: "hidden" }}>
-          <video ref={videoRef} autoPlay playsInline muted style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)", objectFit: "cover" }} />
-          <canvas ref={canvasRef} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: "scaleX(-1)" }} />
-      </div>
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className={`absolute inset-0 w-full h-full object-cover -scale-x-100 ${!isStreaming ? 'hidden' : ''}`}
+            />
+            <canvas 
+              ref={canvasRef} 
+              className={`absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none z-0 ${!isStreaming ? 'hidden' : ''}`}
+            />
 
-      <div style={{ marginTop: "30px" }}>
-        {!isStreaming ? 
-            <button onClick={() => { 
-                    resetSystem(); 
-                    setIsStreaming(true); 
-                    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-                        .then(stream => { if(videoRef.current) videoRef.current.srcObject = stream; }); 
-                }} 
-                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "50px", marginRight: "10px"}}>
-                เริ่มทำงานใหม่ (Start)
-            </button> 
-            :
-            <button onClick={() => setIsStreaming(false)} 
-                style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#dc3545", color: "white", border: "none", borderRadius: "50px", marginRight: "10px"}}>
-                หยุด (Stop)
-            </button>
-        }
+            {!isStreaming && (
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-20 h-20 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                  </svg>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-        <button onClick={() => setIsMuted(!isMuted)} 
-            style={{padding: "15px 40px", fontSize: "18px", cursor: "pointer", backgroundColor: "#007bff", color: "white", border: "none", borderRadius: "50px"}}>
-            {isMuted ? "🔇 ปิดเสียง" : "🔊 เปิดเสียง"}
-        </button>
+        {/* =========================================
+            ฝั่งขวา: Controls & Data (ล็อกความกว้างให้คงที่) 
+        ========================================= */}
+        <div className="w-full lg:w-[360px] flex flex-col gap-6">
+          
+          {/* Control Panel */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-6">System Controls</h3>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={toggleCamera}
+                className={`w-full py-3.5 rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 transition-all duration-300 ${
+                  isStreaming 
+                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200" 
+                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-600/20"
+                }`}
+              >
+                {isStreaming ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                      <path fillRule="evenodd" d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z" clipRule="evenodd" />
+                    </svg>
+                    หยุดการตรวจจับ
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                      <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
+                    </svg>
+                    เริ่มทำงานใหม่
+                  </>
+                )}
+              </button>
+
+              <button 
+                onClick={() => setIsMuted(!isMuted)}
+                className={`w-full py-3.5 rounded-xl font-medium text-[15px] flex items-center justify-center gap-2 transition-all duration-300 border ${
+                  isMuted 
+                    ? "bg-gray-50 text-gray-500 border-gray-200" 
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {isMuted ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                    </svg>
+                    ปิดเสียงเตือน
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                    </svg>
+                    เปิดเสียงเตือนปกติ
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Session Data Panel */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 flex-1 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-6">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-500">
+                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+               </svg>
+               Session Data
+             </h3>
+             <div className="space-y-3">
+                
+                {/* 1. ระยะเวลาขับขี่ (Timer) */}
+                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                  <div className="flex justify-between items-center text-sm mb-3">
+                    <span className="text-gray-500 font-medium">ระยะเวลาขับขี่</span>
+                    <span className="text-gray-900 font-mono font-bold tracking-wide">
+                      {isStreaming ? formatTime(elapsedSeconds) : "00:00:00"}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                    <motion.div 
+                      className="bg-blue-500 h-1 rounded-full" 
+                      initial={{ width: "0%" }}
+                      animate={{ width: isStreaming ? "100%" : "0%" }}
+                      transition={{ duration: elapsedSeconds > 0 ? elapsedSeconds : 1, ease: "linear" }}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. จำนวนกะพริบตา (Blink Counter) */}
+                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
+                    <span className="text-gray-500 font-medium">จำนวนการกะพริบตา</span>
+                    <span className="text-gray-900 font-mono font-bold bg-white px-2 py-1 rounded border border-gray-200">
+                      {isStreaming ? blinkCount : "-"}
+                    </span>
+                </div>
+
+                {/* 3. ค่า EAR ปัจจุบัน */}
+                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
+                    <span className="text-gray-500 font-medium">ค่า EAR ปัจจุบัน</span>
+                    <span className={`font-mono font-bold ${parseFloat(stats.ear) < 0.2 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                      {isStreaming ? stats.ear : "-.--"}
+                    </span>
+                </div>
+
+                {/* 4. ระยะเวลาจ้องมอง */}
+                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
+                    <span className="text-gray-500 font-medium">ระยะเวลาจ้องมอง</span>
+                    <span className={`font-mono font-bold ${parseFloat(stats.stare) > sysConfig.THRESH_STARING ? 'text-rose-500' : 'text-emerald-500'}`}>
+                      {isStreaming ? stats.stare : "-.-s"}
+                    </span>
+                </div>
+
+             </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import "../styles/Admin.css";
+
 
 function AdminDashboard({ user, onLogout }) {
   const [logs, setLogs] = useState([]); 
