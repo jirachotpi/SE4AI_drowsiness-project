@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.database import db
 from datetime import datetime, time, timedelta  # 👈 เพิ่ม timedelta ตรงนี้
 from bson import ObjectId
+import calendar
 
 router = APIRouter()
 
@@ -145,3 +146,76 @@ async def update_system_config(new_config: dict):
     )
     
     return {"message": "บันทึกการตั้งค่าระบบสำเร็จ", "config": new_config}
+
+# ==========================================
+# 7. API ดึงข้อมูลสำหรับทำกราฟสถิติ (7 วัน, เดือน, ปี)
+# ==========================================
+@router.get("/api/admin/chart-data")
+async def get_admin_chart_data(period: str = "7days"):
+    thai_now = datetime.utcnow() + timedelta(hours=7)
+    chart_data = {}
+
+    if period == "7days":
+        start_date = datetime.combine((thai_now - timedelta(days=6)).date(), time.min)
+        logs = await db.logs.find({"timestamp": {"$gte": start_date}}).to_list(None)
+        
+        for i in range(7):
+            d = thai_now - timedelta(days=6 - i)
+            day_str = d.strftime("%d/%m")
+            chart_data[day_str] = {"name": day_str, "ง่วง/วูบ": 0, "หลับใน": 0, "ตาค้าง": 0}
+            
+        for log in logs:
+            log_time = log.get("timestamp")
+            if not log_time: continue
+            day_str = log_time.strftime("%d/%m")
+            event = log.get("event_type")
+            if day_str in chart_data:
+                if event == "drowsy": chart_data[day_str]["ง่วง/วูบ"] += 1
+                elif event == "deep_sleep": chart_data[day_str]["หลับใน"] += 1
+                elif event == "staring": chart_data[day_str]["ตาค้าง"] += 1
+
+    elif period == "month":
+        target_month = thai_now.month
+        target_year = thai_now.year
+        num_days = calendar.monthrange(target_year, target_month)[1]
+        start_date = datetime(target_year, target_month, 1)
+        end_date = start_date + timedelta(days=num_days)
+        
+        logs = await db.logs.find({"timestamp": {"$gte": start_date, "$lt": end_date}}).to_list(None)
+        
+        for i in range(1, num_days + 1):
+            day_str = f"{i:02d}/{target_month:02d}"
+            chart_data[day_str] = {"name": str(i), "ง่วง/วูบ": 0, "หลับใน": 0, "ตาค้าง": 0}
+            
+        for log in logs:
+            log_time = log.get("timestamp")
+            if not log_time: continue
+            day_str = log_time.strftime("%d/%m")
+            event = log.get("event_type")
+            if day_str in chart_data:
+                if event == "drowsy": chart_data[day_str]["ง่วง/วูบ"] += 1
+                elif event == "deep_sleep": chart_data[day_str]["หลับใน"] += 1
+                elif event == "staring": chart_data[day_str]["ตาค้าง"] += 1
+
+    elif period == "year":
+        target_year = thai_now.year
+        start_date = datetime(target_year, 1, 1)
+        end_date = datetime(target_year + 1, 1, 1)
+        
+        logs = await db.logs.find({"timestamp": {"$gte": start_date, "$lt": end_date}}).to_list(None)
+        month_names = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+        
+        for i in range(1, 13):
+            chart_data[i] = {"name": month_names[i-1], "ง่วง/วูบ": 0, "หลับใน": 0, "ตาค้าง": 0}
+            
+        for log in logs:
+            log_time = log.get("timestamp")
+            if not log_time: continue
+            m = log_time.month
+            event = log.get("event_type")
+            if m in chart_data:
+                if event == "drowsy": chart_data[m]["ง่วง/วูบ"] += 1
+                elif event == "deep_sleep": chart_data[m]["หลับใน"] += 1
+                elif event == "staring": chart_data[m]["ตาค้าง"] += 1
+
+    return list(chart_data.values())

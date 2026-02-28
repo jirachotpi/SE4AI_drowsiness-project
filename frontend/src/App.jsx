@@ -17,6 +17,9 @@ import Profile from './pages/Profile';
 import History from './pages/History'; 
 import Dashboard from './pages/Dashboard'; 
 
+// 💡 [NEW] นำเข้าหน้า AdminAnalytics ที่เพิ่งสร้างใหม่
+import AdminAnalytics from './pages/AdminAnalytics'; 
+
 function App() {
   // 1. [BEST PRACTICE] ใช้ Lazy Initialization ดึงข้อมูลจาก LocalStorage ทันที
   const [user, setUser] = useState(() => {
@@ -31,10 +34,8 @@ function App() {
     const checkStatus = async () => {
       try {
         const res = await axios.get('http://127.0.0.1:8000/');
-        // 👇 [แก้ไขตรงนี้] เติม ✅ เข้าไปด้านหน้าข้อความ เพื่อให้ Navbar รู้ว่าเป็นสีเขียว
         setStatus(` ${res.data.message || "ระบบพร้อมใช้งาน"}`);
       } catch (error) {
-        // 👇 ถ้าเชื่อมต่อไม่ได้ ให้ขึ้น ❌ แทน
         setStatus(" เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
       }
     };
@@ -48,7 +49,6 @@ function App() {
 
   return (
     <Router>
-      {/* 3. [TAILWIND] โครงสร้างหลักของเว็บ (ลบ Inline Style ออก) */}
       <div className="flex flex-col min-h-screen bg-slate-50 font-sans text-slate-900">
         
         {/* แถบเมนูด้านบน */}
@@ -70,7 +70,7 @@ function App() {
               <Dashboard user={user} />
             } />
 
-            {/* หน้ากล้องตรวจจับ (เปลี่ยนสไตล์เป็น Modern คลีนๆ) */}
+            {/* หน้ากล้องตรวจจับ */}
             <Route path="/camera" element={
               !user ? <Navigate to="/login" /> : 
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 text-center w-full max-w-5xl mx-auto">
@@ -94,17 +94,28 @@ function App() {
               !user ? <Navigate to="/login" /> : <Profile user={user} />
             } />
 
+            {/* ========================================= */}
+            {/* 🔒 โซนหน้าของ Admin */}
+            {/* ========================================= */}
+
             {/* หน้าจัดการผู้ใช้ (Admin) */}
             <Route path="/admin/users" element={
               !user ? <Navigate to="/login" /> : 
-              user.role === 'admin' ? <UserManagement /> : 
+              user.role === 'admin' ? <UserManagement user={user} onLogout={handleLogout} /> : 
               <Navigate to="/dashboard" />
             } />
 
             {/* หน้าตั้งค่าระบบ AI (Admin) */}
             <Route path="/admin/config" element={
               !user ? <Navigate to="/login" /> : 
-              user.role === 'admin' ? <SystemConfig /> : 
+              user.role === 'admin' ? <SystemConfig user={user} onLogout={handleLogout} /> : 
+              <Navigate to="/dashboard" />
+            } />
+
+            {/* 💡 [NEW] หน้าสถิติและกราฟ (Admin) */}
+            <Route path="/admin/analytics" element={
+              !user ? <Navigate to="/login" /> : 
+              user.role === 'admin' ? <AdminAnalytics user={user} onLogout={handleLogout} /> : 
               <Navigate to="/dashboard" />
             } />
 

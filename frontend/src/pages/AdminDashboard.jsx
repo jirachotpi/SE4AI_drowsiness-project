@@ -78,11 +78,27 @@ function AdminDashboard({ user, onLogout }) {
           </div>
           <div><h1 className="text-lg font-bold text-white tracking-wide">Admin <span className="text-blue-500">Panel</span></h1></div>
         </div>
+        
+        {/* 👇 อัปเดตเมนูให้มี 4 แท็บครบถ้วน 👇 */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <Link to="/dashboard" className="block"><button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium bg-blue-600 text-white shadow-md">ภาพรวมระบบ</button></Link>
-          <Link to="/admin/users" className="block"><button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">จัดการผู้ใช้งาน</button></Link>
-          <Link to="/admin/config" className="block"><button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">ตั้งค่าระบบ AI</button></Link>
+          {/* เมนูที่ 1: ภาพรวมตาราง (Active) */}
+          <Link to="/dashboard" className="block">
+            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium bg-blue-600 text-white shadow-md">ภาพรวมระบบ</button>
+          </Link>
+          {/* เมนูที่ 2: สถิติและกราฟ (เพิ่มเข้ามาใหม่) */}
+          <Link to="/admin/analytics" className="block">
+            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">สถิติและกราฟ</button>
+          </Link>
+          {/* เมนูที่ 3: จัดการผู้ใช้งาน */}
+          <Link to="/admin/users" className="block">
+            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">จัดการผู้ใช้งาน</button>
+          </Link>
+          {/* เมนูที่ 4: ตั้งค่าระบบ */}
+          <Link to="/admin/config" className="block">
+            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">ตั้งค่าระบบ AI</button>
+          </Link>
         </nav>
+
         <div className="p-4 border-t border-slate-800 flex flex-col gap-3">
           <div className="flex items-center gap-3 px-4 py-2">
             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white">{user?.username?.charAt(0).toUpperCase() || "A"}</div>
