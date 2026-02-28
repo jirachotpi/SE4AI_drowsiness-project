@@ -15,8 +15,8 @@ function WebcamCapture({ user }) {
     INTERVAL_MS: 200,
     THRESH_LONG_BLINK: 0.4,
     THRESH_MICROSLEEP: 1.0,
-    THRESH_DEEP_SLEEP: 3.0, // หลับในปกติ 3s
-    THRESH_STARING: 8.0,    // ตาค้าง 8s
+    THRESH_DEEP_SLEEP: 2.0,
+    THRESH_STARING: 8.0,
     THRESH_FREQ_COUNT: 5,
     COOLDOWN_MS: 60000,
     RECOVERY_TIME: 3.0,
@@ -29,9 +29,11 @@ function WebcamCapture({ user }) {
   const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
+  // ระบบจับเวลา (Timer) 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [blinkCount, setBlinkCount] = useState(0);
-  const prevEyeClosed = useRef(false);
+  
+  // 💡 [NEW] State สำหรับนับจำนวน "เริ่มวูบ" สะสม แทนการกะพริบตา
+  const [sessionDrowsyCount, setSessionDrowsyCount] = useState(0);
 
   const warningAudioRef = useRef(null);
   const dangerAudioRef = useRef(null); 
@@ -44,15 +46,14 @@ function WebcamCapture({ user }) {
     lastDrowsyEventTime: Date.now(),
     lastBlinkTime: Date.now(),
     isPlayingDanger: false,
-    isPlayingWarning: false
+    isPlayingWarning: false,
+    hasCountedDrowsyThisTime: false // ป้องกันการนับเบิ้ลใน 1 ครั้งที่วูบ
   });
   
   const latestEarRef = useRef(0.0);       
   const eventStartTimeRef = useRef(null); 
   const isLoggingRef = useRef(false);     
   const eventEarRef = useRef(0.0);
-  // 💡 [NEW] เพิ่มตัวแปรเพื่อจำว่าการแจ้งเตือนรอบนี้คือเหตุการณ์อะไร
-  const activeEventTypeRef = useRef(null); 
 
   // ==========================================
   // 2. ฟังก์ชันหลักของระบบตรวจจับ
@@ -74,6 +75,7 @@ function WebcamCapture({ user }) {
     fetchConfig();
   }, []);
 
+  // Effect สำหรับจับเวลาแบบ Real-time
   useEffect(() => {
     let interval;
     if (isStreaming) {
@@ -86,6 +88,7 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming]);
 
+  // ฟังก์ชันแปลงวินาทีเป็น HH:MM:SS
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
     const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -124,16 +127,16 @@ function WebcamCapture({ user }) {
       lastDrowsyEventTime: Date.now(),
       lastBlinkTime: Date.now(),
       isPlayingDanger: false,
-      isPlayingWarning: false
+      isPlayingWarning: false,
+      hasCountedDrowsyThisTime: false
     };
     eventStartTimeRef.current = null;
     isLoggingRef.current = false;
     latestEarRef.current = 0.0;
-    prevEyeClosed.current = false;
-    activeEventTypeRef.current = null; // 💡 รีเซ็ตตัวแปร
 
+    // รีเซ็ตตัวเลขเมื่อกดทำงานใหม่
     setElapsedSeconds(0);
-    setBlinkCount(0);
+    setSessionDrowsyCount(0); // รีเซ็ตการนับวูบ
 
     setStatusText("ระบบพร้อมทำงาน...");
     setAlertColor("green");
@@ -228,11 +231,6 @@ function WebcamCapture({ user }) {
         return;
     }
 
-    if (!prevEyeClosed.current && data.is_eye_closed) {
-        setBlinkCount(prev => prev + 1);
-    }
-    prevEyeClosed.current = data.is_eye_closed || false;
-
     if (NOW - state.lastDrowsyEventTime > sysConfig.COOLDOWN_MS) {
         state.drowsyEventCount = 0;
     }
@@ -241,49 +239,54 @@ function WebcamCapture({ user }) {
         state.consecutiveClosedFrames += 1;
         state.consecutiveOpenFrames = 0;
         state.lastBlinkTime = NOW; 
+        
+        const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
+        
+        // 💡 [NEW] นับอาการวูบ และแจ้งเตือนเมื่อครบ 5 ครั้ง
+        if (closedDuration >= sysConfig.THRESH_MICROSLEEP && !state.hasCountedDrowsyThisTime) {
+            state.hasCountedDrowsyThisTime = true; // ล็อคไว้ไม่ให้นับซ้ำในเฟรมถัดไปจนกว่าจะลืมตา
+            state.drowsyEventCount += 1;
+            state.lastDrowsyEventTime = NOW;
+
+            setSessionDrowsyCount(prev => {
+                const newCount = prev + 1;
+                // ถ้าครบ 5 ครั้ง ให้เด้ง Alert
+                if (newCount > 0 && newCount % 5 === 0) {
+                    setTimeout(() => {
+                        alert(`⚠️ คำเตือนอันตราย: ตรวจพบอาการ 'เริ่มวูบ' สะสมถึง ${newCount} ครั้งแล้ว! กรุณาจอดพักรถทันทีเพื่อความปลอดภัย`);
+                    }, 200);
+                }
+                return newCount;
+            });
+        }
     } else {
         state.consecutiveOpenFrames += 1;
         const openDuration = state.consecutiveOpenFrames * (sysConfig.INTERVAL_MS / 1000);
-        if (openDuration >= sysConfig.RECOVERY_TIME) state.drowsyEventCount = 0;
-        const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
-        if (closedDuration >= sysConfig.THRESH_MICROSLEEP) {
-             state.drowsyEventCount += 1;
-             state.lastDrowsyEventTime = NOW;
+        if (openDuration >= sysConfig.RECOVERY_TIME) {
+            state.drowsyEventCount = 0;
         }
         state.consecutiveClosedFrames = 0;
+        state.hasCountedDrowsyThisTime = false; // ปลดล็อคเมื่อลืมตา
     }
 
     const currentClosedSeconds = (state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
     
-    // 💡 [NEW] แยกเงื่อนไขการเช็ก และอัปเดตค่าประเภทการแจ้งเตือน
-    if (stareSeconds >= sysConfig.THRESH_STARING) {
-        setAlertColor("red");
-        setStatusText("อันตราย! หลับใน (ตาค้าง)");
-        handleSound("danger"); 
-        activeEventTypeRef.current = "staring"; // บันทึกว่าแดงเพราะตาค้าง
-    } 
-    else if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
+    if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || 
+        stareSeconds >= sysConfig.THRESH_STARING || 
+        state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
         setAlertColor("red");
         setStatusText("อันตราย! พักเดี๋ยวนี้");
         handleSound("danger"); 
-        activeEventTypeRef.current = "deep_sleep"; // บันทึกว่าแดงเพราะหลับในปกติ
-    } 
-    else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
+    } else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
         setAlertColor("orange");
         setStatusText(`ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("warning"); 
-        // ถ้ายังไม่ได้เป็น deep_sleep หรือ staring ค่อยบันทึกว่าเป็น drowsy
-        if (activeEventTypeRef.current !== "deep_sleep" && activeEventTypeRef.current !== "staring") {
-            activeEventTypeRef.current = "drowsy"; 
-        }
-    } 
-    else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
+    } else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
         setAlertColor("yellow");
         setStatusText(`ง่วงนอน... (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("stop"); 
-    } 
-    else {
+    } else {
         setAlertColor("green");
         setStatusText("ปกติ (ขับขี่ปลอดภัย)");
         handleSound("stop");
@@ -307,18 +310,23 @@ function WebcamCapture({ user }) {
         else if (alertColor === "yellow") color = "#fbbf24";
         else if (alertColor === "gray") color = "#94a3b8";
 
+        // 💡 [NEW] แก้กรอบกลับหัว (Mirror Fix): คำนวณแกน X ให้สลับซ้าย-ขวา เพื่อให้ตรงกับ Video ที่ตั้งค่า ScaleX(-1) ไว้
+        const canvasWidth = canvasRef.current.width;
+        const boxWidth = box[2];
+        const flippedX = canvasWidth - box[0] - boxWidth;
+
         ctx.strokeStyle = color;
         ctx.lineWidth = 4;
-        ctx.strokeRect(box[0], box[1], box[2], box[3]);
+        ctx.strokeRect(flippedX, box[1], boxWidth, box[3]);
         
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.roundRect(box[0], box[1] - 32, 110, 32, [6, 6, 0, 0]);
+        ctx.roundRect(flippedX, box[1] - 32, 110, 32, [6, 6, 0, 0]);
         ctx.fill();
         
         ctx.fillStyle = "white";
         ctx.font = "bold 16px sans-serif";
-        ctx.fillText(`EAR: ${ear}`, box[0] + 8, box[1] - 10);
+        ctx.fillText(`EAR: ${ear}`, flippedX + 8, box[1] - 10);
     }
   };
 
@@ -330,7 +338,6 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming, alertColor, isMuted, sysConfig]);
 
-  // 💡 [NEW] อัปเดตการบันทึก Log ให้ใช้ประเภทเหตุการณ์ที่เราเพิ่งแยกไว้
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
@@ -343,16 +350,10 @@ function WebcamCapture({ user }) {
       if (isLoggingRef.current && eventStartTimeRef.current) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
-        
-        // 💡 ใช้ค่าจาก activeEventTypeRef ที่ตั้งไว้ตอนกล้องจับได้ แทนการเช็กเวลา
-        const finalType = activeEventTypeRef.current || "drowsy";
-        
+        const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
         saveLog(finalType, duration, eventEarRef.current);
-        
-        // รีเซ็ตค่าหลังจากบันทึกเสร็จ
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
-        activeEventTypeRef.current = null; 
       }
     }
   }, [alertColor]);
@@ -439,19 +440,16 @@ function WebcamCapture({ user }) {
   return (
     <div className="w-full flex justify-center font-sans mt-8">
       
-      {/* Container หลัก จัดการความกว้างสูงสุด */}
+      {/* Container หลัก */}
       <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 px-4">
         
         {/* Audio Sources */}
         <audio ref={warningAudioRef} src={sysConfig.PATH_WARNING_SOUND} preload="auto" />
         <audio ref={dangerAudioRef} src={sysConfig.PATH_DANGER_SOUND} preload="auto" loop />
 
-        {/* =========================================
-            ฝั่งซ้าย: กล้อง AI (ขยายเต็มพื้นที่ flex-1 และคงสัดส่วน) 
-        ========================================= */}
+        {/* ฝั่งซ้าย: กล้อง AI */}
         <div className="flex-1 flex flex-col gap-4">
           
-          {/* Status Banner */}
           <AnimatePresence mode="wait">
             <motion.div 
               key={alertColor}
@@ -465,15 +463,12 @@ function WebcamCapture({ user }) {
             </motion.div>
           </AnimatePresence>
 
-          {/* Camera Box (ตั้งค่า Aspect Ratio เพื่อไม่ให้ยาวเกินไป) */}
           <div className={`relative w-full aspect-[4/3] rounded-3xl bg-gray-50 border-2 overflow-hidden transition-all duration-300 shadow-sm flex items-center justify-center ${isStreaming ? statusCfg.border : 'border-gray-200'}`}>
             
             {isStreaming && (
-              <>
-                <div className="absolute bottom-4 left-4 font-mono text-xs text-gray-500 bg-white/90 px-3 py-1.5 rounded-md backdrop-blur-sm z-10 uppercase border border-gray-200 shadow-sm">
-                  SYS.ON // FPS: OPTIMAL // LIVE
-                </div>
-              </>
+              <div className="absolute bottom-4 left-4 font-mono text-xs text-gray-500 bg-white/90 px-3 py-1.5 rounded-md backdrop-blur-sm z-10 uppercase border border-gray-200 shadow-sm">
+                SYS.ON // FPS: OPTIMAL // LIVE
+              </div>
             )}
 
             <video 
@@ -483,9 +478,10 @@ function WebcamCapture({ user }) {
               muted 
               className={`absolute inset-0 w-full h-full object-cover -scale-x-100 ${!isStreaming ? 'hidden' : ''}`}
             />
+            {/* 💡 [NEW] ปลด CSS -scale-x-100 ออกจาก Canvas เพื่อให้ตัวอักษรไม่กลับด้าน และขยับตาม Logic ที่ตั้งไว้ */}
             <canvas 
               ref={canvasRef} 
-              className={`absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none z-0 ${!isStreaming ? 'hidden' : ''}`}
+              className={`absolute inset-0 w-full h-full object-cover pointer-events-none z-0 ${!isStreaming ? 'hidden' : ''}`}
             />
 
             {!isStreaming && (
@@ -501,12 +497,9 @@ function WebcamCapture({ user }) {
           </div>
         </div>
 
-        {/* =========================================
-            ฝั่งขวา: Controls & Data (ล็อกความกว้างให้คงที่) 
-        ========================================= */}
+        {/* ฝั่งขวา: Controls & Data */}
         <div className="w-full lg:w-[360px] flex flex-col gap-6">
           
-          {/* Control Panel */}
           <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-6">System Controls</h3>
             
@@ -573,7 +566,7 @@ function WebcamCapture({ user }) {
              </h3>
              <div className="space-y-3">
                 
-                {/* 1. ระยะเวลาขับขี่ (Timer) */}
+                {/* 1. ระยะเวลาขับขี่ */}
                 <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
                   <div className="flex justify-between items-center text-sm mb-3">
                     <span className="text-gray-500 font-medium">ระยะเวลาขับขี่</span>
@@ -591,11 +584,13 @@ function WebcamCapture({ user }) {
                   </div>
                 </div>
 
-                {/* 2. จำนวนกะพริบตา (Blink Counter) */}
-                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
-                    <span className="text-gray-500 font-medium">จำนวนการกะพริบตา</span>
-                    <span className="text-gray-900 font-mono font-bold bg-white px-2 py-1 rounded border border-gray-200">
-                      {isStreaming ? blinkCount : "-"}
+                {/* 2. 💡 [NEW] จำนวนเริ่มวูบสะสม (เตือนเมื่อครบ 5) */}
+                <div className="bg-amber-50/30 p-4 rounded-2xl border border-amber-100 flex justify-between items-center text-sm">
+                    <span className="text-amber-600 font-bold flex items-center gap-1.5">
+                      ⚠️ จำนวนเริ่มวูบสะสม
+                    </span>
+                    <span className="text-amber-800 font-mono font-black bg-white px-2 py-1 rounded-lg border border-amber-200 shadow-sm">
+                      {isStreaming ? sessionDrowsyCount : "-"} / 5
                     </span>
                 </div>
 

@@ -8,103 +8,166 @@ import {
 function Dashboard({ user }) {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  // ตั้งค่าเริ่มต้น: โหมด 7 วัน และเดือนปัจจุบัน
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   
-  const [period, setPeriod] = useState("7d"); // "7d", "month", "year"
+  const [period, setPeriod] = useState("7d");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth); 
 
-  // ดึงข้อมูลใหม่ทุกครั้งที่ผู้ใช้กดเปลี่ยนโหมด หรือเปลี่ยนเดือน
   useEffect(() => {
-    if (user && user.username) {
-      fetchStats();
-    }
-  }, [user, period, selectedMonth]); 
+    // ย้ายฟังก์ชันเข้ามาใน useEffect เพื่อป้องกันปัญหา Dependency ของ React
+    const fetchStats = async () => {
+      if (!user || !user.username) return;
 
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      // ส่ง period, เดือน (m) และ ปี (y) ไปให้ Backend คำนวณ
-      const res = await axios.get(`http://127.0.0.1:8000/api/logs/stats?user_id=${user.username}&period=${period}&m=${selectedMonth}&y=${currentYear}`);
-      setChartData(res.data);
-    } catch (err) {
-      console.error("❌ ไม่สามารถดึงข้อมูลสถิติได้:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // ใช้ Environment Variable แทนการ Hardcode (มี Fallback เป็น localhost)
+        const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+        
+        // ใช้ params ของ axios เพื่อให้อ่านง่ายและจัดการ URL ได้ดีขึ้น
+        const res = await axios.get(`${apiUrl}/api/logs/stats`, {
+          params: {
+            user_id: user.username,
+            period: period,
+            m: selectedMonth,
+            y: currentYear
+          }
+        });
+        setChartData(res.data);
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+        setError("ไม่สามารถโหลดข้อมูลสถิติได้ กรุณาลองใหม่อีกครั้ง");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // สไตล์สำหรับปุ่มกด (Active = สีฟ้า, ไม่ Active = สีเทา)
+    fetchStats();
+  }, [user, period, selectedMonth, currentYear]); 
+
   const getButtonStyle = (currentPeriod) => ({
-    padding: "8px 20px",
-    margin: "0 5px",
-    borderRadius: "20px",
-    border: "none",
+    padding: "10px 24px",
+    margin: "0 8px",
+    borderRadius: "8px",
+    border: "1px solid",
+    borderColor: period === currentPeriod ? "#2563eb" : "#e5e7eb",
     cursor: "pointer",
-    fontWeight: "bold",
-    backgroundColor: period === currentPeriod ? "#3498db" : "#ecf0f1",
-    color: period === currentPeriod ? "white" : "#7f8c8d",
-    transition: "all 0.3s"
+    fontWeight: "500",
+    fontSize: "14px",
+    backgroundColor: period === currentPeriod ? "#eff6ff" : "#ffffff",
+    color: period === currentPeriod ? "#1d4ed8" : "#4b5563",
+    transition: "all 0.2s ease-in-out",
+    boxShadow: period === currentPeriod ? "0 1px 2px 0 rgba(0, 0, 0, 0.05)" : "none"
   });
 
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "20px" }}>
-      <h2 style={{ textAlign: "center", color: "#2c3e50" }}>📊 สถิติความง่วงของคุณ</h2>
+    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "32px 20px", fontFamily: "sans-serif" }}>
       
-      {/* ส่วนปุ่มเลือกโหมด */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
-        <button style={getButtonStyle("7d")} onClick={() => setPeriod("7d")}>📅 7 วันล่าสุด</button>
-        <button style={getButtonStyle("month")} onClick={() => setPeriod("month")}>📆 รายเดือน (1-12)</button>
-        <button style={getButtonStyle("year")} onClick={() => setPeriod("year")}>📈 ภาพรวม 1 ปี</button>
+      <div style={{ marginBottom: "32px" }}>
+        <h2 style={{ color: "#111827", fontSize: "24px", fontWeight: "600", margin: "0 0 8px 0" }}>
+          สถิติความง่วงของคุณ
+        </h2>
+        <p style={{ color: "#6b7280", margin: "0", fontSize: "14px" }}>
+          ติดตามและวิเคราะห์พฤติกรรมการหลับในและอาการวูบของคุณ
+        </p>
       </div>
-
-      {/* 🔴 [NEW] จะแสดง Dropdown ให้เลือกเดือน 1-12 ก็ต่อเมื่อกดปุ่ม "รายเดือน" */}
-      {period === "month" && (
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px", alignItems: "center" }}>
-          <span style={{ marginRight: "10px", fontWeight: "bold", color: "#2c3e50" }}>เลือกเดือน:</span>
-          <select 
-            value={selectedMonth} 
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            style={{ padding: "8px 15px", borderRadius: "5px", border: "1px solid #bdc3c7", fontSize: "16px", cursor: "pointer" }}
-          >
-            {[...Array(12).keys()].map(i => (
-              <option key={i+1} value={i+1}>เดือนที่ {i+1}</option>
-            ))}
-          </select>
-        </div>
-      )}
       
-      {/* ส่วนแสดงกราฟ */}
-      <div style={{ 
-        backgroundColor: "white", 
-        padding: "20px", 
-        borderRadius: "10px", 
-        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-        height: "450px"
-      }}>
-        {loading ? (
-           <div style={{ textAlign: "center", paddingTop: "150px" }}>กำลังอัปเดตกราฟ...</div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 0, bottom: 25 }}
+      <div style={{ display: "flex", marginBottom: "24px", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+        <button style={getButtonStyle("7d")} onClick={() => setPeriod("7d")}>
+          7 วันล่าสุด
+        </button>
+        <button style={getButtonStyle("month")} onClick={() => setPeriod("month")}>
+          รายเดือน
+        </button>
+        <button style={getButtonStyle("year")} onClick={() => setPeriod("year")}>
+          ภาพรวม 1 ปี
+        </button>
+
+        {period === "month" && (
+          <div style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
+            <span style={{ marginRight: "12px", fontSize: "14px", color: "#374151", fontWeight: "500" }}>
+              เลือกเดือน:
+            </span>
+            <select 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              style={{ 
+                padding: "8px 16px", 
+                borderRadius: "8px", 
+                border: "1px solid #d1d5db", 
+                fontSize: "14px", 
+                backgroundColor: "white",
+                color: "#111827",
+                cursor: "pointer",
+                outline: "none"
+              }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              {/* ถ้าดูโหมดเดือน (มี 30 แท่ง) ให้ตัวหนังสือแกน X เอียง 45 องศา จะได้ไม่เบียดกัน */}
+              {[...Array(12).keys()].map(i => (
+                <option key={i+1} value={i+1}>เดือนที่ {i+1}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      
+      <div style={{ 
+        backgroundColor: "#ffffff", 
+        padding: "24px", 
+        borderRadius: "12px", 
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+        height: "450px",
+        position: "relative"
+      }}>
+        {loading && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#6b7280" }}>
+            กำลังโหลดข้อมูล...
+          </div>
+        )}
+
+        {error && !loading && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#dc2626", backgroundColor: "#fef2f2", padding: "12px 24px", borderRadius: "8px", border: "1px solid #f87171" }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && chartData.length === 0 && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#6b7280" }}>
+            ไม่มีข้อมูลในข่วงเวลานี้
+          </div>
+        )}
+
+        {!loading && !error && chartData.length > 0 && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 20, right: 20, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis 
                 dataKey="date" 
-                tick={{fontSize: 12}} 
+                tick={{ fontSize: 12, fill: "#6b7280" }} 
                 angle={period === "month" ? -45 : 0} 
-                textAnchor={period === "month" ? "end" : "middle"} 
+                textAnchor={period === "month" ? "end" : "middle"}
+                dy={period === "month" ? 15 : 10}
+                axisLine={{ stroke: "#d1d5db" }}
+                tickLine={false}
               />
-              <YAxis allowDecimals={false} />
-              <Tooltip contentStyle={{ borderRadius: "10px", border: "none", boxShadow: "0 2px 5px rgba(0,0,0,0.2)" }} />
-              <Legend wrapperStyle={{ paddingTop: "10px" }} />
-              <Bar dataKey="drowsy" name="วูบ (ครั้ง)" fill="#f39c12" radius={[5, 5, 0, 0]} />
-              <Bar dataKey="deep_sleep" name="หลับใน (ครั้ง)" fill="#c0392b" radius={[5, 5, 0, 0]} />
+              <YAxis 
+                allowDecimals={false} 
+                tick={{ fontSize: 12, fill: "#6b7280" }}
+                axisLine={false}
+                tickLine={false}
+                dx={-10}
+              />
+              <Tooltip 
+                contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
+                cursor={{ fill: "#f3f4f6" }}
+              />
+              <Legend wrapperStyle={{ paddingTop: "20px" }} />
+              <Bar dataKey="drowsy" name="วูบ (ครั้ง)" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={50} />
+              <Bar dataKey="deep_sleep" name="หลับใน (ครั้ง)" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={50} />
             </BarChart>
           </ResponsiveContainer>
         )}
