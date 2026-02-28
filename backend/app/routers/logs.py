@@ -5,8 +5,6 @@ from app.database import db
 from app.models.models import LogEntry
 from datetime import datetime, timedelta
 import calendar
-from typing import Optional
-from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -23,7 +21,8 @@ async def get_logs(user_id: Optional[str] = None): # เปลี่ยน usern
     if user_id:
         query["user_id"] = user_id # กรองตาม user_id
 
-    logs = await db.logs.find(query).sort("timestamp", -1).limit(100).to_list(100)
+    # ดึงประวัติมาทั้งหมดก่อน (เดี๋ยวเราไปทำ Pagination ที่ Frontend)
+    logs = await db.logs.find(query).sort("timestamp", -1).to_list(None)
     
     results = []
     for log in logs:
@@ -35,7 +34,8 @@ async def get_logs(user_id: Optional[str] = None): # เปลี่ยน usern
 
 @router.get("/api/logs/stats")
 async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y: Optional[int] = None):
-    now = datetime.utcnow()
+    # 💡 [NEW] ใช้เวลาประเทศไทย (UTC+7) เพื่อความแม่นยำในการจัดกลุ่มวัน
+    now = datetime.utcnow() + timedelta(hours=7)
     stats = {}
     
     # กำหนดปีและเดือนเป้าหมาย (ถ้าไม่ได้ส่งมา ให้ใช้เดือน/ปี ปัจจุบัน)
@@ -47,7 +47,8 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
         start_date = now - timedelta(days=6)
         for i in range(6, -1, -1):
             day_str = (now - timedelta(days=i)).strftime("%d/%m")
-            stats[day_str] = {"date": day_str, "drowsy": 0, "deep_sleep": 0}
+            # 💡 [NEW] เพิ่ม staring
+            stats[day_str] = {"date": day_str, "drowsy": 0, "deep_sleep": 0, "staring": 0}
             
         query = {"user_id": user_id, "timestamp": {"$gte": start_date}}
         logs = await db.logs.find(query).to_list(None)
@@ -57,6 +58,7 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
             if key in stats:
                 if log["event_type"] == "drowsy": stats[key]["drowsy"] += 1
                 elif log["event_type"] == "deep_sleep": stats[key]["deep_sleep"] += 1
+                elif log["event_type"] == "staring": stats[key]["staring"] += 1 # นับตาค้าง
 
     elif period == "month":
         # 🟡 โหมดเลือกเดือน (เดือน 1 ถึง 12) โชว์วันที่ 1-31
@@ -71,7 +73,8 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
 
         for d in range(1, num_days + 1):
             day_str = f"{d:02d}/{target_month:02d}"
-            stats[day_str] = {"date": day_str, "drowsy": 0, "deep_sleep": 0}
+            # 💡 [NEW] เพิ่ม staring
+            stats[day_str] = {"date": day_str, "drowsy": 0, "deep_sleep": 0, "staring": 0}
             
         query = {"user_id": user_id, "timestamp": {"$gte": start_date, "$lt": end_date}}
         logs = await db.logs.find(query).to_list(None)
@@ -81,6 +84,7 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
             if key in stats:
                 if log["event_type"] == "drowsy": stats[key]["drowsy"] += 1
                 elif log["event_type"] == "deep_sleep": stats[key]["deep_sleep"] += 1
+                elif log["event_type"] == "staring": stats[key]["staring"] += 1 # นับตาค้าง
 
     elif period == "year":
         # 🔴 โหมด 1 ปี (โชว์ภาพรวม 12 เดือน)
@@ -89,7 +93,8 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
         
         month_names = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
         for i in range(1, 13):
-            stats[i] = {"date": month_names[i-1], "drowsy": 0, "deep_sleep": 0}
+            # 💡 [NEW] เพิ่ม staring
+            stats[i] = {"date": month_names[i-1], "drowsy": 0, "deep_sleep": 0, "staring": 0}
             
         query = {"user_id": user_id, "timestamp": {"$gte": start_date, "$lt": end_date}}
         logs = await db.logs.find(query).to_list(None)
@@ -99,5 +104,6 @@ async def get_stats(user_id: str, period: str = "7d", m: Optional[int] = None, y
             if m_idx in stats:
                 if log["event_type"] == "drowsy": stats[m_idx]["drowsy"] += 1
                 elif log["event_type"] == "deep_sleep": stats[m_idx]["deep_sleep"] += 1
+                elif log["event_type"] == "staring": stats[m_idx]["staring"] += 1 # นับตาค้าง
                 
     return list(stats.values())
