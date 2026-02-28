@@ -18,16 +18,24 @@ async def get_admin_stats():
     # นับจำนวนแจ้งเตือนเฉพาะวันนี้
     today_start = datetime.combine(datetime.utcnow().date(), time.min)
     today_alerts = await db.logs.count_documents({"timestamp": {"$gte": today_start}})
+    
     deep_sleep_today = await db.logs.count_documents({
         "timestamp": {"$gte": today_start},
         "event_type": "deep_sleep"
+    })
+    
+    # 💡 [ส่วนที่เพิ่มใหม่] นับจำนวนสถิติ "ตาค้าง" เฉพาะวันนี้
+    staring_today = await db.logs.count_documents({
+        "timestamp": {"$gte": today_start},
+        "event_type": "staring"
     })
     
     return {
         "total_users": total_users,
         "total_logs": total_logs,
         "today_alerts": today_alerts,
-        "deep_sleep_today": deep_sleep_today
+        "deep_sleep_today": deep_sleep_today,
+        "staring_today": staring_today  # 👈 ส่งค่าตาค้างกลับไปให้หน้า Dashboard ด้วย
     }
 
 # ==========================================

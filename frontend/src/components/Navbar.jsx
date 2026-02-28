@@ -2,6 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 function Navbar({ user, onLogout, status }) {
+  // 💡 [ส่วนที่เพิ่ม] ซ่อน Navbar ทันที ถ้าผู้ใช้คนนี้เป็น 'admin' (เพราะแอดมินมี Sidebar อยู่แล้ว)
+  if (user && user.role === 'admin') {
+    return null; 
+  }
+
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
