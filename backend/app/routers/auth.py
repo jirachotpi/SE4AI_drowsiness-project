@@ -9,12 +9,19 @@ from typing import Optional
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# สร้าง Schema สำหรับรับข้อมูลอัปเดต
+# ==========================================
+# 💡 [NEW] อัปเดต Schema สำหรับรับข้อมูลอัปเดตจาก Profile
+# ==========================================
 class UserUpdateModel(BaseModel):
     username: str
     email: Optional[str] = None
     current_password: Optional[str] = None
     new_password: Optional[str] = None
+    # เพิ่มฟิลด์ใหม่ตาม PB-30
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    phone: Optional[str] = None
+    department: Optional[str] = None
 
 @router.post("/api/register")
 async def register(user: UserRegister):
@@ -36,7 +43,12 @@ async def register(user: UserRegister):
         "email": user.email,
         "password": hashed_password,
         "role": "user",
-        "is_suspended": False # ✅ [แก้ไขแล้ว] ใช้ is_suspended: False แทนสถานะ active
+        "is_suspended": False, # ใช้ is_suspended: False แทนสถานะ active
+        # 💡 [NEW] กำหนดค่าเริ่มต้นของข้อมูลส่วนตัวให้เป็นค่าว่างตอนสมัครสมาชิก
+        "age": None,
+        "gender": "",
+        "phone": "",
+        "department": ""
     }
     await db.users.insert_one(new_user)
     return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
@@ -47,7 +59,7 @@ async def login(user: UserLogin):
     if not db_user:
         raise HTTPException(status_code=400, detail="ไม่พบชื่อผู้ใช้นี้")
 
-    # 🚨 ✅ [แก้ไขแล้ว] เช็กสถานะบัญชีจาก is_suspended ให้ตรงกับ Database
+    # เช็กสถานะบัญชีจาก is_suspended ให้ตรงกับ Database
     if db_user.get("is_suspended") is True:
         raise HTTPException(status_code=403, detail="บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ")
 
@@ -97,6 +109,12 @@ async def update_my_profile(data: UserUpdateModel):
         # เข้ารหัสผ่านใหม่ก่อนบันทึกลง Database 
         update_data["password"] = pwd_context.hash(data.new_password)
         
+    # 3. 💡 [NEW] นำข้อมูล Profile ที่รับมาไปอัปเดตลง Database
+    if data.age is not None: update_data["age"] = data.age
+    if data.gender is not None: update_data["gender"] = data.gender
+    if data.phone is not None: update_data["phone"] = data.phone
+    if data.department is not None: update_data["department"] = data.department
+
     if update_data:
         await db.users.update_one({"username": data.username}, {"$set": update_data})
         return {"message": "อัปเดตข้อมูลสำเร็จเรียบร้อย"}

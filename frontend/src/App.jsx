@@ -17,7 +17,7 @@ import Profile from './pages/Profile';
 import History from './pages/History'; 
 import Dashboard from './pages/Dashboard'; 
 
-// 💡 [NEW] นำเข้าหน้า AdminAnalytics ที่เพิ่งสร้างใหม่
+// นำเข้าหน้า AdminAnalytics ที่เพิ่งสร้างใหม่
 import AdminAnalytics from './pages/AdminAnalytics'; 
 
 function App() {
@@ -54,14 +54,18 @@ function App() {
         {/* แถบเมนูด้านบน */}
         <Navbar user={user} onLogout={handleLogout} status={status} />
         
-        {/* พื้นที่แสดงผลหน้าต่างๆ */}
-        <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        {/* พื้นที่แสดงผลหน้าต่างๆ 💡 [NEW] เพิ่ม pb-30 ตรงนี้เพื่อให้มีระยะห่างด้านล่างในทุกๆ หน้า */}
+        <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-30">
           <Routes>
             <Route path="/" element={<Welcome />} />
             
-            {/* ระบบล็อกอิน/สมัครสมาชิก */}
-            <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLoginSuccess={setUser} />} />
-            <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
+            {/* 💡 [NEW] ระบบล็อกอิน/สมัครสมาชิก: ถ้าเป็น User ไปหน้า /camera ถ้าเป็น Admin ไป /dashboard */}
+            <Route path="/login" element={
+              user ? <Navigate to={user.role === 'admin' ? "/dashboard" : "/camera"} /> : <Login onLoginSuccess={setUser} />
+            } />
+            <Route path="/register" element={
+              user ? <Navigate to={user.role === 'admin' ? "/dashboard" : "/camera"} /> : <Register />
+            } />
             
             {/* หน้า Dashboard หลัก */}
             <Route path="/dashboard" element={
@@ -112,7 +116,7 @@ function App() {
               <Navigate to="/dashboard" />
             } />
 
-            {/* 💡 [NEW] หน้าสถิติและกราฟ (Admin) */}
+            {/* หน้าสถิติและกราฟ (Admin) */}
             <Route path="/admin/analytics" element={
               !user ? <Navigate to="/login" /> : 
               user.role === 'admin' ? <AdminAnalytics user={user} onLogout={handleLogout} /> : 

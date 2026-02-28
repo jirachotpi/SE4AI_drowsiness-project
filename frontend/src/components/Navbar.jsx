@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 function Navbar({ user, onLogout, status }) {
-  // 💡 [ส่วนที่เพิ่ม] ซ่อน Navbar ทันที ถ้าผู้ใช้คนนี้เป็น 'admin' (เพราะแอดมินมี Sidebar อยู่แล้ว)
+  // ซ่อน Navbar ทันที ถ้าผู้ใช้คนนี้เป็น 'admin' (เพราะแอดมินมี Sidebar อยู่แล้ว)
   if (user && user.role === 'admin') {
     return null; 
   }
@@ -14,7 +14,8 @@ function Navbar({ user, onLogout, status }) {
           
           {/* ส่วนโลโก้และสถานะระบบ */}
           <div className="flex items-center gap-4">
-            <Link to={user ? "/dashboard" : "/"} className="text-xl font-bold text-slate-900 tracking-tight text-decoration-none">
+            {/* 💡 เปลี่ยน Link ให้ชี้ไปที่ /camera แทน /dashboard ตาม Flow ใหม่ */}
+            <Link to={user ? "/camera" : "/"} className="text-xl font-bold text-slate-900 tracking-tight text-decoration-none">
               Drowsiness<span className="text-blue-600">AI</span>
             </Link>
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
@@ -38,9 +39,11 @@ function Navbar({ user, onLogout, status }) {
                 <span className="text-sm font-medium text-slate-500 border-r border-slate-200 pr-6">
                   สวัสดี, {user.username}
                 </span>
-                <Link to="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">สถิติ</Link>
-                <Link to="/camera" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">กล้อง AI</Link>
-                <Link to="/history" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">ประวัติ</Link>
+                
+                {/* 💡 [NEW] จัดเรียงและเปลี่ยนชื่อเมนูตาม PB-30 */}
+                <Link to="/camera" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">กล้อง</Link>
+                <Link to="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">กราฟวิเคราะห์</Link>
+                <Link to="/history" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">สถิติการใช้งาน</Link>
                 <Link to="/profile" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">โปรไฟล์</Link>
                 
                 <button onClick={onLogout} className="text-sm font-medium text-rose-600 hover:text-rose-700 bg-rose-50 px-4 py-2 rounded-lg hover:bg-rose-100 transition-colors ml-2">

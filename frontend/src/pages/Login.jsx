@@ -6,11 +6,14 @@ import axios from "axios";
 function Login({ onLoginSuccess }) {
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(""); // เพิ่ม State สำหรับจัดการ Error
+  const [errorMsg, setErrorMsg] = useState("");
+  
+  // 💡 อย่าลืมเรียกใช้ useNavigate
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (errorMsg) setErrorMsg(""); // ลบ Error เมื่อผู้ใช้เริ่มพิมพ์ใหม่
+    if (errorMsg) setErrorMsg(""); 
   };
 
   const handleSubmit = async (e) => {
@@ -21,9 +24,15 @@ function Login({ onLoginSuccess }) {
       const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
       localStorage.setItem("drowsiness_user", JSON.stringify(response.data));
       onLoginSuccess(response.data);
-      navigate("/dashboard");
+      
+      // 💡 [NEW] ตรวจสอบ Role เพื่อพาไปหน้าที่ถูกต้อง
+      if (response.data.role === "admin") {
+        navigate("/dashboard"); // ถ้าเป็นแอดมิน ไปหน้าแดชบอร์ด
+      } else {
+        navigate("/camera"); // ถ้าเป็นคนขับรถ (user) ไปหน้ากล้อง
+      }
+
     } catch (error) {
-      // แสดงข้อความ Error ใน UI แทนการใช้ alert
       setErrorMsg(error.response?.data?.detail || "ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง โปรดลองอีกครั้ง");
     } finally {
       setIsLoading(false);
@@ -70,7 +79,6 @@ function Login({ onLoginSuccess }) {
             <p className="text-slate-500 font-medium">โปรดกรอกข้อมูลของท่านเพื่อดำเนินการต่อ</p>
           </div>
 
-          {/* กล่องแสดงข้อความ Error แบบใหม่ */}
           {errorMsg && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium flex items-center gap-3 animate-pulse">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 shrink-0">

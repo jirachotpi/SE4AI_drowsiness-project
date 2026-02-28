@@ -7,8 +7,13 @@ function Profile({ user }) {
   // ==========================================
   // 1. State สำหรับเก็บข้อมูลจริงจาก API
   // ==========================================
-  const [profileData, setProfileData] = useState({ username: "", email: "", role: "" });
-  const [formData, setFormData] = useState({ email: "", currentPassword: "", newPassword: "" });
+  // 💡 [NEW] เพิ่มฟิลด์ age, gender, phone, department
+  const [profileData, setProfileData] = useState({ 
+    username: "", email: "", role: "", age: "", gender: "", phone: "", department: "" 
+  });
+  const [formData, setFormData] = useState({ 
+    email: "", age: "", gender: "", phone: "", department: "", currentPassword: "", newPassword: "" 
+  });
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,7 +34,16 @@ function Profile({ user }) {
       try {
         const res = await axios.get(`http://127.0.0.1:8000/api/users/me?username=${user.username}`);
         setProfileData(res.data);
-        setFormData({ email: res.data.email || "", currentPassword: "", newPassword: "" });
+        // 💡 [NEW] เซ็ตค่าเริ่มต้นฟอร์มจากข้อมูลที่ดึงมา
+        setFormData({ 
+          email: res.data.email || "", 
+          age: res.data.age || "",
+          gender: res.data.gender || "",
+          phone: res.data.phone || "",
+          department: res.data.department || "",
+          currentPassword: "", 
+          newPassword: "" 
+        });
         setIsLoading(false);
       } catch (err) {
         setMessage({ text: "ไม่สามารถดึงข้อมูลโปรไฟล์ได้", type: "error" });
@@ -46,7 +60,6 @@ function Profile({ user }) {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    // เคลียร์ข้อความแจ้งเตือนเมื่อผู้ใช้เริ่มพิมพ์ใหม่
     if (message.text) setMessage({ text: "", type: "" });
   };
 
@@ -60,9 +73,14 @@ function Profile({ user }) {
     setMessage({ text: "", type: "" });
 
     try {
+      // 💡 [NEW] เพิ่มข้อมูลใหม่ลงใน Payload
       const payload = {
         username: user.username,
         email: formData.email,
+        age: formData.age ? Number(formData.age) : null,
+        gender: formData.gender,
+        phone: formData.phone,
+        department: formData.department,
         current_password: formData.currentPassword || null,
         new_password: formData.newPassword || null
       };
@@ -72,11 +90,9 @@ function Profile({ user }) {
       setMessage({ text: res.data.message || "บันทึกข้อมูลเรียบร้อยแล้ว", type: "success" });
       setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "" }));
       
-      // ดึงข้อมูลใหม่เพื่ออัปเดต UI ฝั่งซ้าย
       const updatedRes = await axios.get(`http://127.0.0.1:8000/api/users/me?username=${user.username}`);
       setProfileData(updatedRes.data);
       
-      // ให้ข้อความสำเร็จหายไปเองหลัง 3 วินาที
       setTimeout(() => setMessage({ text: "", type: "" }), 3000);
 
     } catch (err) {
@@ -131,7 +147,7 @@ function Profile({ user }) {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
+    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 font-sans pb-30">
       
       {/* ส่วนหัวหน้าเว็บ */}
       <div className="mb-8">
@@ -158,7 +174,6 @@ function Profile({ user }) {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex flex-col items-center text-center">
             
-            {/* Avatar Placeholder */}
             <div className="relative mb-6">
               <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-5xl font-black text-blue-600 shadow-inner border-4 border-white">
                 {getInitial(profileData.username || user?.username)}
@@ -180,15 +195,25 @@ function Profile({ user }) {
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">ข้อมูลบัญชี</h3>
+             {/* 💡 [NEW] แสดงข้อมูลที่เพิ่มเข้ามาในฝั่งซ้าย */}
              <ul className="space-y-3 text-sm">
                <li className="flex justify-between items-center">
-                 <span className="text-gray-500">สถานะการเชื่อมต่อ</span>
+                 <span className="text-gray-500">สถานะ</span>
                  <span className="font-medium text-emerald-600 flex items-center gap-1.5">
                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> ปกติ
                  </span>
                </li>
                <li className="flex justify-between items-center">
-              
+                 <span className="text-gray-500">อายุ</span>
+                 <span className="font-medium text-gray-800">{profileData.age ? `${profileData.age} ปี` : "-"}</span>
+               </li>
+               <li className="flex justify-between items-center">
+                 <span className="text-gray-500">เพศ</span>
+                 <span className="font-medium text-gray-800">{profileData.gender || "-"}</span>
+               </li>
+               <li className="flex justify-between items-center">
+                 <span className="text-gray-500">แผนก/สังกัด</span>
+                 <span className="font-medium text-gray-800">{profileData.department || "-"}</span>
                </li>
              </ul>
           </div>
@@ -201,10 +226,9 @@ function Profile({ user }) {
           
           <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
             <h2 className="text-xl font-bold text-gray-900 mb-6 border-b border-gray-100 pb-4">
-              แก้ไขข้อมูลส่วนตัว
+              ข้อมูลส่วนตัว
             </h2>
 
-            {/* แสดงข้อความแจ้งเตือน (Alert Messages) */}
             {message.text && (
               <motion.div 
                 initial={{ opacity: 0, y: -10 }}
@@ -224,7 +248,7 @@ function Profile({ user }) {
               </motion.div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700">ชื่อผู้ใช้งาน (Username)</label>
                 <input 
@@ -233,7 +257,6 @@ function Profile({ user }) {
                   disabled
                   className="w-full rounded-xl border border-gray-200 bg-gray-100 text-gray-500 px-4 py-3 outline-none cursor-not-allowed"
                 />
-                <p className="text-xs text-gray-400">ไม่สามารถแก้ไขชื่อผู้ใช้งานได้</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700">อีเมล (Email)</label>
@@ -242,6 +265,60 @@ function Profile({ user }) {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  placeholder="example@mail.com"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-gray-800 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* 💡 [NEW] โซนข้อมูลระบุตัวตนที่เพิ่มใหม่ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">อายุ (ปี)</label>
+                <input 
+                  type="number" 
+                  name="age"
+                  value={formData.age}
+                  onChange={handleChange}
+                  placeholder="เช่น 25"
+                  min="15"
+                  max="100"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-gray-800 font-medium"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">เพศ</label>
+                <select 
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-gray-800 font-medium appearance-none"
+                >
+                  <option value="">-- ระบุเพศ --</option>
+                  <option value="ชาย">ชาย</option>
+                  <option value="หญิง">หญิง</option>
+                  <option value="อื่นๆ">อื่นๆ / ไม่ระบุ</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">เบอร์โทรศัพท์</label>
+                <input 
+                  type="tel" 
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="08X-XXX-XXXX"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-gray-800 font-medium"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">แผนก / สังกัด</label>
+                <input 
+                  type="text" 
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  placeholder="เช่น พนักงานขับรถสายเหนือ"
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-gray-800 font-medium"
                 />
               </div>
@@ -277,7 +354,6 @@ function Profile({ user }) {
               </div>
             </div>
 
-            {/* ส่วนตั้งค่าระบบด้วย Toggle Switch (จำลองสำหรับ UI) */}
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 pt-6 border-t border-gray-100">
               การตั้งค่าระบบ (System Preferences)
             </h3>
