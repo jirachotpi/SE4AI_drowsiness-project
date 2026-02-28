@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.database import db
-from datetime import datetime, time
+from datetime import datetime, time, timedelta  # 👈 เพิ่ม timedelta ตรงนี้
 from bson import ObjectId
 
 router = APIRouter()
@@ -15,8 +15,11 @@ async def get_admin_stats():
     total_users = await db.users.count_documents({"role": "user"})
     total_logs = await db.logs.count_documents({})
     
-    # นับจำนวนแจ้งเตือนเฉพาะวันนี้
-    today_start = datetime.combine(datetime.utcnow().date(), time.min)
+    # 💡 [ส่วนที่แก้ไข] ใช้เวลาประเทศไทย (UTC+7) ในการคำนวณ "วันนี้"
+    thai_now = datetime.utcnow() + timedelta(hours=7)
+    today_start = datetime.combine(thai_now.date(), time.min)
+    
+    # นับจำนวนแจ้งเตือนเฉพาะวันนี้ (เวลาไทย)
     today_alerts = await db.logs.count_documents({"timestamp": {"$gte": today_start}})
     
     deep_sleep_today = await db.logs.count_documents({
@@ -24,7 +27,6 @@ async def get_admin_stats():
         "event_type": "deep_sleep"
     })
     
-    # 💡 [ส่วนที่เพิ่มใหม่] นับจำนวนสถิติ "ตาค้าง" เฉพาะวันนี้
     staring_today = await db.logs.count_documents({
         "timestamp": {"$gte": today_start},
         "event_type": "staring"
@@ -35,7 +37,7 @@ async def get_admin_stats():
         "total_logs": total_logs,
         "today_alerts": today_alerts,
         "deep_sleep_today": deep_sleep_today,
-        "staring_today": staring_today  # 👈 ส่งค่าตาค้างกลับไปให้หน้า Dashboard ด้วย
+        "staring_today": staring_today 
     }
 
 # ==========================================
@@ -43,18 +45,15 @@ async def get_admin_stats():
 # ==========================================
 @router.get("/api/admin/users")
 async def get_all_users():
-    # ดึงผู้ใช้ทั้งหมดมาแสดง
     users = await db.users.find({}).to_list(1000)
     result = []
     for u in users:
         u["id"] = str(u["_id"])
         del u["_id"]
         
-        # ลบรหัสผ่านทิ้งเพื่อความปลอดภัยก่อนส่งไปหน้าเว็บ
         if "password" in u:
             del u["password"]
             
-        # เติมสถานะ default ถ้ายังไม่มี
         if "is_suspended" not in u:
             u["is_suspended"] = False
             
@@ -86,17 +85,14 @@ async def toggle_suspend_user(user_id: str, payload: SuspendPayload):
 @router.delete("/api/admin/users/{user_id}")
 async def delete_user(user_id: str):
     try:
-        # 1. ค้นหาผู้ใช้ก่อนเพื่อเอา username
         user = await db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้งาน")
         
         username = user.get("username")
         
-        # 2. ลบบัญชีผู้ใช้
         result = await db.users.delete_one({"_id": ObjectId(user_id)})
         if result.deleted_count == 1:
-            # 3. ลบประวัติ log ของผู้ใช้นี้ทิ้งไปด้วย (ใช้ username ในการค้นหา log)
             await db.logs.delete_many({"user_id": username})
             return {"message": "ลบผู้ใช้และประวัติสำเร็จ"}
             
@@ -108,17 +104,15 @@ async def delete_user(user_id: str):
 # ==========================================
 @router.get("/api/admin/config")
 async def get_system_config():
-    # ค้นหา config แบบตั้งค่า AI
     config = await db.config.find_one({"type": "ai_threshold"})
     
     if not config:
-        # ถ้ายังไม่มีในระบบ ให้สร้างค่าเริ่มต้น (Default)
         default_config = {
             "type": "ai_threshold",
             "ear_threshold": 0.2,
             "drowsy_time": 2.0,
             "sleep_time": 3.0,
-            "staring_time": 8.0  # เพิ่มค่าเริ่มต้นของตาค้าง
+            "staring_time": 8.0 
         }
         await db.config.insert_one(default_config)
         del default_config["_id"]
@@ -127,7 +121,6 @@ async def get_system_config():
     config["id"] = str(config["_id"])
     del config["_id"]
     
-    # ดักจับกรณีที่มีข้อมูลเก่าใน Database แต่ไม่มีฟิลด์ "ตาค้าง"
     if "staring_time" not in config:
         config["staring_time"] = 8.0 
         
@@ -138,16 +131,13 @@ async def get_system_config():
 # ==========================================
 @router.put("/api/admin/config")
 async def update_system_config(new_config: dict):
-    # ป้องกัน Error กรณีหน้าเว็บส่ง id หรือ _id ติดมาด้วย
     if "id" in new_config:
         del new_config["id"]
     if "_id" in new_config:
         del new_config["_id"]
         
-    # บังคับประเภทเป็น ai_threshold เสมอ
     new_config["type"] = "ai_threshold"
     
-    # อัปเดตข้อมูลทั้งหมดลง Database (Upsert: ถ้าไม่มีให้สร้างใหม่)
     await db.config.update_one(
         {"type": "ai_threshold"},
         {"$set": new_config},
