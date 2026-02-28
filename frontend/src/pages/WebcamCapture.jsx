@@ -63,7 +63,8 @@ function WebcamCapture({ user }) {
         setSysConfig(prev => ({
           ...prev,
           THRESH_MICROSLEEP: res.data.drowsy_time,
-          THRESH_DEEP_SLEEP: res.data.sleep_time
+          THRESH_DEEP_SLEEP: res.data.sleep_time,
+          THRESH_STARING: res.data.staring_time || 8.0
         }));
       } catch (err) {
         console.error("ไม่สามารถดึงการตั้งค่าได้ ใช้ค่าเริ่มต้นแทน", err);
