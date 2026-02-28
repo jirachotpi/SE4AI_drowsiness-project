@@ -38,17 +38,18 @@ async def register(user: UserRegister):
 
     # เข้ารหัสผ่านก่อนบันทึก
     hashed_password = pwd_context.hash(user.password)
+    
+    # 💡 [แก้ไข] ดึงข้อมูลที่ส่งมาจากหน้า Register.jsx มาบันทึกลงฐานข้อมูล
     new_user = {
         "username": user.username,
         "email": user.email,
         "password": hashed_password,
         "role": "user",
         "is_suspended": False, # ใช้ is_suspended: False แทนสถานะ active
-        # 💡 [NEW] กำหนดค่าเริ่มต้นของข้อมูลส่วนตัวให้เป็นค่าว่างตอนสมัครสมาชิก
-        "age": None,
-        "gender": "",
-        "phone": "",
-        "department": ""
+        "age": user.age,
+        "gender": user.gender,
+        "phone": user.phone,
+        "department": user.department
     }
     await db.users.insert_one(new_user)
     return {"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}
@@ -109,7 +110,7 @@ async def update_my_profile(data: UserUpdateModel):
         # เข้ารหัสผ่านใหม่ก่อนบันทึกลง Database 
         update_data["password"] = pwd_context.hash(data.new_password)
         
-    # 3. 💡 [NEW] นำข้อมูล Profile ที่รับมาไปอัปเดตลง Database
+    # 3. นำข้อมูล Profile ที่รับมาไปอัปเดตลง Database
     if data.age is not None: update_data["age"] = data.age
     if data.gender is not None: update_data["gender"] = data.gender
     if data.phone is not None: update_data["phone"] = data.phone

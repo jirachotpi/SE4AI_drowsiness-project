@@ -1,8 +1,9 @@
 # --- backend/app/models/models.py ---
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta
+from typing import Optional  # 💡 [เพิ่มใหม่] นำเข้า Optional สำหรับฟิลด์ที่ไม่บังคับกรอก
 
-# 💡 [เพิ่มใหม่] ฟังก์ชันดึงเวลาปัจจุบันของประเทศไทย (UTC+7)
+# 💡 ฟังก์ชันดึงเวลาปัจจุบันของประเทศไทย (UTC+7)
 def get_thai_time():
     return datetime.utcnow() + timedelta(hours=7)
 
@@ -11,6 +12,11 @@ class UserRegister(BaseModel):
     username: str = Field(..., min_length=3)
     email: EmailStr
     password: str = Field(..., min_length=6)
+    # 💡 [เพิ่มใหม่] ฟิลด์ข้อมูลส่วนตัว (ใส่ Optional เพื่อให้ไม่บังคับกรอกในบางกรณี)
+    department: Optional[str] = ""
+    phone: Optional[str] = ""
+    age: Optional[int] = None
+    gender: Optional[str] = ""
 
 # 2. แบบแปลนสำหรับ "เข้าสู่ระบบ"
 class UserLogin(BaseModel):
