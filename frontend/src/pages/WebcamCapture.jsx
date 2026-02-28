@@ -15,8 +15,8 @@ function WebcamCapture({ user }) {
     INTERVAL_MS: 200,
     THRESH_LONG_BLINK: 0.4,
     THRESH_MICROSLEEP: 1.0,
-    THRESH_DEEP_SLEEP: 2.0,
-    THRESH_STARING: 8.0,
+    THRESH_DEEP_SLEEP: 3.0, // หลับในปกติ 3s
+    THRESH_STARING: 8.0,    // ตาค้าง 8s
     THRESH_FREQ_COUNT: 5,
     COOLDOWN_MS: 60000,
     RECOVERY_TIME: 3.0,
@@ -29,7 +29,6 @@ function WebcamCapture({ user }) {
   const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
-  // ระบบจับเวลา (Timer) และนับจำนวนกะพริบตา (Blink Counter)
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [blinkCount, setBlinkCount] = useState(0);
   const prevEyeClosed = useRef(false);
@@ -52,6 +51,8 @@ function WebcamCapture({ user }) {
   const eventStartTimeRef = useRef(null); 
   const isLoggingRef = useRef(false);     
   const eventEarRef = useRef(0.0);
+  // 💡 [NEW] เพิ่มตัวแปรเพื่อจำว่าการแจ้งเตือนรอบนี้คือเหตุการณ์อะไร
+  const activeEventTypeRef = useRef(null); 
 
   // ==========================================
   // 2. ฟังก์ชันหลักของระบบตรวจจับ
@@ -73,7 +74,6 @@ function WebcamCapture({ user }) {
     fetchConfig();
   }, []);
 
-  // Effect สำหรับจับเวลาแบบ Real-time
   useEffect(() => {
     let interval;
     if (isStreaming) {
@@ -86,7 +86,6 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming]);
 
-  // ฟังก์ชันแปลงวินาทีเป็น HH:MM:SS
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
     const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -131,8 +130,8 @@ function WebcamCapture({ user }) {
     isLoggingRef.current = false;
     latestEarRef.current = 0.0;
     prevEyeClosed.current = false;
+    activeEventTypeRef.current = null; // 💡 รีเซ็ตตัวแปร
 
-    // รีเซ็ตตัวเลขเมื่อกดทำงานใหม่
     setElapsedSeconds(0);
     setBlinkCount(0);
 
@@ -229,7 +228,6 @@ function WebcamCapture({ user }) {
         return;
     }
 
-    // คำนวณจำนวนการกะพริบตา (Blink Counter)
     if (!prevEyeClosed.current && data.is_eye_closed) {
         setBlinkCount(prev => prev + 1);
     }
@@ -258,21 +256,34 @@ function WebcamCapture({ user }) {
     const currentClosedSeconds = (state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
     
-    if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || 
-        stareSeconds >= sysConfig.THRESH_STARING || 
-        state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
+    // 💡 [NEW] แยกเงื่อนไขการเช็ก และอัปเดตค่าประเภทการแจ้งเตือน
+    if (stareSeconds >= sysConfig.THRESH_STARING) {
+        setAlertColor("red");
+        setStatusText("อันตราย! หลับใน (ตาค้าง)");
+        handleSound("danger"); 
+        activeEventTypeRef.current = "staring"; // บันทึกว่าแดงเพราะตาค้าง
+    } 
+    else if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
         setAlertColor("red");
         setStatusText("อันตราย! พักเดี๋ยวนี้");
         handleSound("danger"); 
-    } else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
+        activeEventTypeRef.current = "deep_sleep"; // บันทึกว่าแดงเพราะหลับในปกติ
+    } 
+    else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
         setAlertColor("orange");
         setStatusText(`ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("warning"); 
-    } else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
+        // ถ้ายังไม่ได้เป็น deep_sleep หรือ staring ค่อยบันทึกว่าเป็น drowsy
+        if (activeEventTypeRef.current !== "deep_sleep" && activeEventTypeRef.current !== "staring") {
+            activeEventTypeRef.current = "drowsy"; 
+        }
+    } 
+    else if (currentClosedSeconds >= sysConfig.THRESH_LONG_BLINK) {
         setAlertColor("yellow");
         setStatusText(`ง่วงนอน... (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("stop"); 
-    } else {
+    } 
+    else {
         setAlertColor("green");
         setStatusText("ปกติ (ขับขี่ปลอดภัย)");
         handleSound("stop");
@@ -319,6 +330,7 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming, alertColor, isMuted, sysConfig]);
 
+  // 💡 [NEW] อัปเดตการบันทึก Log ให้ใช้ประเภทเหตุการณ์ที่เราเพิ่งแยกไว้
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
@@ -331,10 +343,16 @@ function WebcamCapture({ user }) {
       if (isLoggingRef.current && eventStartTimeRef.current) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
-        const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
+        
+        // 💡 ใช้ค่าจาก activeEventTypeRef ที่ตั้งไว้ตอนกล้องจับได้ แทนการเช็กเวลา
+        const finalType = activeEventTypeRef.current || "drowsy";
+        
         saveLog(finalType, duration, eventEarRef.current);
+        
+        // รีเซ็ตค่าหลังจากบันทึกเสร็จ
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
+        activeEventTypeRef.current = null; 
       }
     }
   }, [alertColor]);

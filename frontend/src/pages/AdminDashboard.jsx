@@ -10,9 +10,9 @@ function AdminDashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
 
   // ระบบ Pagination และ Filter วันที่
-  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA')); // ค่าเริ่มต้นคือวันนี้ (YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA')); 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15; // แสดงหน้าละ 15 บรรทัด
+  const itemsPerPage = 15; 
 
   const fetchData = async () => {
     try {
@@ -79,21 +79,16 @@ function AdminDashboard({ user, onLogout }) {
           <div><h1 className="text-lg font-bold text-white tracking-wide">Admin <span className="text-blue-500">Panel</span></h1></div>
         </div>
         
-        {/* 👇 อัปเดตเมนูให้มี 4 แท็บครบถ้วน 👇 */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          {/* เมนูที่ 1: ภาพรวมตาราง (Active) */}
           <Link to="/dashboard" className="block">
             <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium bg-blue-600 text-white shadow-md">ภาพรวมระบบ</button>
           </Link>
-          {/* เมนูที่ 2: สถิติและกราฟ (เพิ่มเข้ามาใหม่) */}
           <Link to="/admin/analytics" className="block">
             <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">สถิติและกราฟ</button>
           </Link>
-          {/* เมนูที่ 3: จัดการผู้ใช้งาน */}
           <Link to="/admin/users" className="block">
             <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">จัดการผู้ใช้งาน</button>
           </Link>
-          {/* เมนูที่ 4: ตั้งค่าระบบ */}
           <Link to="/admin/config" className="block">
             <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-slate-800 hover:text-white">ตั้งค่าระบบ AI</button>
           </Link>
@@ -134,12 +129,16 @@ function AdminDashboard({ user, onLogout }) {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">เริ่มง่วง (วันนี้)</p>
                 <h3 className="text-2xl font-black text-slate-800">{stats.today_alerts - stats.deep_sleep_today - (stats.staring_today || 0)} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
               </div>
+              
+              {/* 💡 [แก้ชื่อ] สีแดง = หลับใน */}
               <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-center border-l-4 border-l-rose-500">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">หลับใน (วันนี้)</p>
                 <h3 className="text-2xl font-black text-rose-600">{stats.deep_sleep_today} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
               </div>
+
+              {/* 💡 [แก้ชื่อ] สีม่วง = หลับใน (ตาค้าง) */}
               <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-center border-l-4 border-l-purple-500">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ตาค้าง (วันนี้)</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">หลับใน (ตาค้าง) (วันนี้)</p>
                 <h3 className="text-2xl font-black text-purple-600">{stats.staring_today || 0} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
               </div>
             </div>
@@ -152,7 +151,6 @@ function AdminDashboard({ user, onLogout }) {
                    ประวัติการแจ้งเตือน
                  </h3>
                  
-                 {/* ตัวกรองวันที่ */}
                  <div className="flex items-center gap-2">
                    <label className="text-sm font-bold text-slate-500">เลือกวันที่:</label>
                    <input 
@@ -187,16 +185,16 @@ function AdminDashboard({ user, onLogout }) {
                              {log.user_id}
                            </td>
                            <td className="px-6 py-4">
+                             {/* 💡 [แก้ชื่อ] ให้ตรงกันทั้ง หลับใน และ หลับใน(ตาค้าง) */}
                              {log.event_type === "deep_sleep" ? (
                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> หลับใน</span>
                              ) : log.event_type === "staring" ? (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> ตาค้าง</span>
+                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> หลับใน (ตาค้าง)</span>
                              ) : (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> ง่วง/วูบ</span>
+                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> เริ่มวูบ</span>
                              )}
                            </td>
                            <td className="px-6 py-4 text-sm font-mono text-center text-slate-500">
-                             {/* แปลงจาก ms เป็นวินาที */ }
                              {log.duration_ms ? (log.duration_ms / 1000).toFixed(1) + ' s' : '-'}
                            </td>
                            <td className="px-6 py-4 text-sm font-mono text-center">

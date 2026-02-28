@@ -14,7 +14,16 @@ function AdminAnalytics({ user, onLogout }) {
     try {
       setLoading(true);
       const res = await axios.get(`http://127.0.0.1:8000/api/admin/chart-data?period=${period}`);
-      setChartData(res.data);
+      
+      // 💡 [NEW] จัดการ Data ให้ชื่อ Key ตรงกัน ไม่ว่า Backend จะส่งอะไรมา
+      const formattedData = res.data.map(item => ({
+        ...item,
+        "เริ่มวูบ": item["ง่วง/วูบ"] || item.drowsy || 0,
+        "หลับใน": item["หลับใน"] || item.deep_sleep || 0,
+        "หลับใน (ตาค้าง)": item["ตาค้าง"] || item.staring || item["หลับใน (ตาค้าง)"] || 0,
+      }));
+      
+      setChartData(formattedData);
       setLoading(false);
     } catch (err) {
       console.error("Error fetching analytics:", err);
@@ -29,9 +38,9 @@ function AdminAnalytics({ user, onLogout }) {
   // ==========================================
   // คำนวณสถิติภาพรวมจากข้อมูลกราฟ (Summary Stats)
   // ==========================================
-  const totalDrowsy = chartData.reduce((acc, curr) => acc + (curr["ง่วง/วูบ"] || 0), 0);
-  const totalSleep = chartData.reduce((acc, curr) => acc + (curr["หลับใน"] || 0), 0);
-  const totalStaring = chartData.reduce((acc, curr) => acc + (curr["ตาค้าง"] || 0), 0);
+  const totalDrowsy = chartData.reduce((acc, curr) => acc + curr["เริ่มวูบ"], 0);
+  const totalSleep = chartData.reduce((acc, curr) => acc + curr["หลับใน"], 0);
+  const totalStaring = chartData.reduce((acc, curr) => acc + curr["หลับใน (ตาค้าง)"], 0);
   const totalIncidents = totalDrowsy + totalSleep + totalStaring;
 
   return (
@@ -145,7 +154,7 @@ function AdminAnalytics({ user, onLogout }) {
                     <h3 className="text-3xl font-black text-slate-800">{totalIncidents} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center border-b-4 border-b-amber-500">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ง่วง/วูบ สะสม</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">เริ่มวูบ สะสม</p>
                     <h3 className="text-3xl font-black text-amber-500">{totalDrowsy} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center border-b-4 border-b-rose-500">
@@ -153,7 +162,7 @@ function AdminAnalytics({ user, onLogout }) {
                     <h3 className="text-3xl font-black text-rose-600">{totalSleep} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center border-b-4 border-b-purple-500">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">ตาค้าง สะสม</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">หลับใน (ตาค้าง) สะสม</p>
                     <h3 className="text-3xl font-black text-purple-600">{totalStaring} <span className="text-sm font-medium text-slate-400">ครั้ง</span></h3>
                   </div>
                 </div>
@@ -171,9 +180,11 @@ function AdminAnalytics({ user, onLogout }) {
                         <YAxis tick={{fill: '#64748b'}} axisLine={false} tickLine={false} allowDecimals={false} />
                         <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f1f5f9'}} />
                         <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                        <Bar dataKey="ง่วง/วูบ" stackId="a" fill="#f59e0b" radius={period === 'month' ? [0,0,0,0] : [0, 0, 4, 4]} />
-                        <Bar dataKey="ตาค้าง" stackId="a" fill="#a855f7" />
-                        <Bar dataKey="หลับใน" stackId="a" fill="#e11d48" radius={period === 'month' ? [2,2,0,0] : [4, 4, 0, 0]} />
+                        
+                        {/* 💡 [NEW] ดึงค่าตามชื่อ Key ที่เราสร้างใหม่ด้านบน */}
+                        <Bar dataKey="เริ่มวูบ" stackId="a" fill="#f59e0b" radius={[0, 0, 4, 4]} />
+                        <Bar dataKey="หลับใน" stackId="a" fill="#e11d48" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="หลับใน (ตาค้าง)" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
