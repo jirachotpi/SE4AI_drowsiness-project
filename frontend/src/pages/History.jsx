@@ -11,13 +11,13 @@ function History({ user }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 💡 [NEW] State สำหรับ Pagination และ Date Filter
+  // State สำหรับ Pagination และ Date Filter
   const [currentPage, setCurrentPage] = useState(1);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const itemsPerPage = 10; // กำหนดจำนวนรายการต่อหน้า
+  const itemsPerPage = 10; 
 
-  // ดึงข้อมูลประวัติจาก API ของจริง
+  // ดึงข้อมูลประวัติจาก API
   useEffect(() => {
     if (!user || !user.username) {
         setIsLoading(false);
@@ -47,17 +47,17 @@ function History({ user }) {
     fetchHistory();
   }, [user]);
 
-  // 💡 [NEW] รีเซ็ตกลับไปหน้า 1 เสมอเมื่อมีการเปลี่ยนตัวกรองวันที่
+  // รีเซ็ตกลับไปหน้า 1 เสมอเมื่อมีการเปลี่ยนตัวกรองวันที่
   useEffect(() => {
     setCurrentPage(1);
   }, [startDate, endDate]);
 
-  // 💡 [NEW] กรองข้อมูลตามวันที่ (Date Filter)
+  // กรองข้อมูลตามวันที่ (Date Filter)
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
       if (!log.timestamp) return false;
       const logDate = new Date(log.timestamp);
-      logDate.setHours(0, 0, 0, 0); // รีเซ็ตเวลาเพื่อเทียบเฉพาะวัน
+      logDate.setHours(0, 0, 0, 0); 
 
       if (startDate) {
         const sDate = new Date(startDate);
@@ -73,9 +73,8 @@ function History({ user }) {
     });
   }, [logs, startDate, endDate]);
 
-  // 💡 [NEW] จัดกลุ่มข้อมูลสำหรับกราฟ และเพิ่ม "ตาค้าง"
+  // จัดกลุ่มข้อมูลสำหรับกราฟ
   const chartData = useMemo(() => {
-    // นำข้อมูลที่กรองแล้วมาสร้างกราฟ และเรียงลำดับจากเก่าไปใหม่ (เพื่อแสดงในกราฟซ้ายไปขวา)
     const sortedForChart = [...filteredLogs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     
     return sortedForChart.reduce((acc, log) => {
@@ -87,26 +86,26 @@ function History({ user }) {
       const existing = acc.find(item => item.date === dateStr);
       if (existing) {
         if (log.event_type === "deep_sleep") existing.deep_sleep += 1;
-        else if (log.event_type === "staring") existing.staring += 1; // นับตาค้าง
+        else if (log.event_type === "staring") existing.staring += 1; 
         else existing.drowsy += 1;
       } else {
         acc.push({
           date: dateStr,
           drowsy: log.event_type === "drowsy" ? 1 : 0,
           deep_sleep: log.event_type === "deep_sleep" ? 1 : 0,
-          staring: log.event_type === "staring" ? 1 : 0, // เริ่มนับตาค้าง
+          staring: log.event_type === "staring" ? 1 : 0, 
         });
       }
       return acc;
     }, []);
   }, [filteredLogs]);
 
-  // 💡 [NEW] คำนวณข้อมูลสำหรับ Pagination (เลือกเฉพาะข้อมูลที่จะโชว์ในหน้านั้นๆ)
-  const sortedLogs = [...filteredLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // เรียงใหม่สุดขึ้นก่อน
+  // คำนวณข้อมูลสำหรับ Pagination
+  const sortedLogs = [...filteredLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); 
   const totalPages = Math.ceil(sortedLogs.length / itemsPerPage) || 1;
   const currentTableData = sortedLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // ฟังก์ชันจัดรูปแบบวันที่ให้สวยงาม
+  // ฟังก์ชันจัดรูปแบบวันที่
   const formatDate = (isoString) => {
     if (!isoString) return "-";
     const date = new Date(isoString);
@@ -116,33 +115,33 @@ function History({ user }) {
     });
   };
 
-  // 💡 [NEW] คอมโพเนนต์ป้ายกำกับ (Badge) รองรับตาค้าง (สีแดง)
+  // 💡 [แก้ไข] ป้ายกำกับ (Badge) สลับสีและชื่อให้ถูกต้องตามคำสั่ง
   const EventBadge = ({ type }) => {
     if (type === "deep_sleep") {
       return (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200 shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5 animate-pulse"></span>
-          หลับใน (Deep Sleep)
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span>
+          หลับใน
         </span>
       );
     }
     if (type === "staring") {
       return (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span>
-          ตาค้าง (Staring)
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5 animate-pulse"></span>
+          หลับใน (ตาค้าง)
         </span>
       );
     }
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 shadow-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-        เริ่มวูบ (Drowsy)
+        เริ่มวูบ
       </span>
     );
   };
 
-  // 💡 [NEW] คอมโพเนนต์ Tooltip รองรับตาค้าง
+  // 💡 [แก้ไข] Tooltip สำหรับกราฟ ให้ชื่อตรงกัน
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -151,7 +150,7 @@ function History({ user }) {
           {payload.map((entry, index) => {
             let labelName = "เริ่มวูบ";
             if (entry.name === "deep_sleep") labelName = "หลับใน";
-            if (entry.name === "staring") labelName = "ตาค้าง";
+            if (entry.name === "staring") labelName = "หลับใน (ตาค้าง)";
             
             return (
               <p key={index} className="text-sm font-medium flex justify-between gap-4 my-1" style={{ color: entry.color }}>
@@ -169,7 +168,6 @@ function History({ user }) {
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
       
-      {/* ส่วนหัวหน้าเว็บ */}
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2 flex items-center gap-3">
           <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -194,7 +192,6 @@ function History({ user }) {
           className="space-y-8"
         >
 
-          {/* แจ้งเตือน Error ถ้ามี */}
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-600 p-4 rounded-xl flex items-center gap-3">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" /></svg>
@@ -202,7 +199,7 @@ function History({ user }) {
             </div>
           )}
 
-          {/* ส่วนตัวกรองวันที่ (Date Filter) */}
+          {/* ส่วนตัวกรองวันที่ */}
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-end">
             <div className="flex flex-col w-full sm:w-auto">
               <label className="text-sm font-bold text-gray-600 mb-1">ตั้งแต่วันที่</label>
@@ -230,7 +227,6 @@ function History({ user }) {
             </button>
           </div>
 
-          {/* ส่วนกราฟสรุปผล (Analytics Dashboard) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* กล่องสถิติย่อย */}
@@ -245,20 +241,22 @@ function History({ user }) {
                 </div>
               </div>
 
+              {/* 💡 [แก้ไข] กล่องสีแดง คือ หลับในปกติ (3 วิ) */}
               <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">ตาค้าง (แดง)</p>
-                  <h3 className="text-3xl font-black text-red-600">{filteredLogs.filter(l => l.event_type === "staring").length}</h3>
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">หลับใน</p>
+                  <h3 className="text-3xl font-black text-red-600">{filteredLogs.filter(l => l.event_type === "deep_sleep").length}</h3>
                 </div>
                 <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center">
                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" /></svg>
                 </div>
               </div>
 
+              {/* 💡 [แก้ไข] กล่องสีม่วง คือ หลับใน(ตาค้าง 8 วิ) */}
               <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">หลับใน (ม่วง)</p>
-                  <h3 className="text-3xl font-black text-purple-600">{filteredLogs.filter(l => l.event_type === "deep_sleep").length}</h3>
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">หลับใน (ตาค้าง)</p>
+                  <h3 className="text-3xl font-black text-purple-600">{filteredLogs.filter(l => l.event_type === "staring").length}</h3>
                 </div>
                 <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center">
                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
@@ -278,9 +276,11 @@ function History({ user }) {
                       <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
                       <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '14px' }}/>
+                      
+                      {/* 💡 [แก้ไข] ปรับสีและชื่อให้ตรงเงื่อนไข */}
                       <Bar dataKey="drowsy" name="เริ่มวูบ" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={30} stackId="a" />
-                      <Bar dataKey="deep_sleep" name="หลับใน" fill="#a855f7" radius={[0, 0, 0, 0]} maxBarSize={30} stackId="a" />
-                      <Bar dataKey="staring" name="ตาค้าง" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={30} stackId="a" />
+                      <Bar dataKey="deep_sleep" name="หลับใน" fill="#ef4444" radius={[0, 0, 0, 0]} maxBarSize={30} stackId="a" />
+                      <Bar dataKey="staring" name="หลับใน (ตาค้าง)" fill="#a855f7" radius={[0, 0, 0, 0]} maxBarSize={30} stackId="a" />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -295,7 +295,7 @@ function History({ user }) {
             </div>
           </div>
 
-          {/* ส่วนตารางข้อมูล (Data Table) พร้อม Pagination */}
+          {/* ส่วนตารางข้อมูล */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
               <h3 className="text-lg font-bold text-gray-800">รายละเอียดเหตุการณ์ (เรียงจากใหม่ไปเก่า)</h3>
@@ -315,7 +315,6 @@ function History({ user }) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {currentTableData.map((log, index) => {
-                    // คำนวณลำดับที่แท้จริง (เพื่อให้เลขเรียงถูกต้องแม้จะอยู่หน้า 2, 3...)
                     const realIndex = filteredLogs.length - ((currentPage - 1) * itemsPerPage + index);
                     
                     return (
@@ -363,7 +362,7 @@ function History({ user }) {
               </table>
             </div>
 
-            {/* ส่วนปุ่มเปลี่ยนหน้า (Pagination Controls) */}
+            {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
                 <span className="text-sm text-gray-600">
