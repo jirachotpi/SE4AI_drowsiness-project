@@ -8,6 +8,10 @@ from app.database import db
 from app.models.models import UserRegister, UserLogin
 from pydantic import BaseModel
 from typing import Optional
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # คำสั่งให้ไปอ่านค่าจากไฟล์ .env
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -15,9 +19,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # ==========================================
 # 💡 [NEW PB-33] ตั้งค่าสำหรับการทำ JWT
 # ==========================================
-SECRET_KEY = "your-super-secret-pb33-key" # ในอนาคตควรย้ายไปไว้ในไฟล์ .env
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # Token มีอายุ 1 วัน (24 ชั่วโมง)
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-key-for-local-testing")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
 # ตัวช่วยดึง Token จาก Header (Authorization: Bearer <token>)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
