@@ -26,7 +26,7 @@ function Welcome() {
         <div className="text-center max-w-3xl mx-auto mb-16 mt-8">
           <div className="inline-flex items-center px-4 py-1.5 rounded-full border border-slate-700 bg-slate-900/50 backdrop-blur-sm text-slate-300 text-sm font-medium mb-8 shadow-sm">
             <span className="flex w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
-            SE4AI Drowsiness System
+            Drowsiness System
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight mb-6 drop-shadow-lg">
             ระบบผู้ช่วย AI <br className="hidden md:block" />
