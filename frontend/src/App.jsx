@@ -59,24 +59,23 @@ function App() {
   }, []);
 
   // 3. useEffect เช็กสถานะ Backend (Health Check)
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        // 💡 ดึง Base URL จาก api.js (ซึ่งมันจะอ่านจาก .env ให้เองตอนขึ้น Vercel)
-        // เพื่อป้องกันการยิงไป localhost ตอนใช้งานจริง
-        const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-        
-        // ตรงนี้ใช้ fetch ก็ได้ครับ เพื่อเช็กแค่สถานะเซิร์ฟเวอร์
-        const response = await fetch(`${BASE_URL}/`);
-        const data = await response.json();
-        
-        setStatus(` ${data.message || "ระบบพร้อมใช้งาน"}`);
-      } catch (error) {
-        setStatus(" เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
-      }
-    };
-    checkStatus();
-  }, []);
+useEffect(() => {
+  const checkStatus = async () => {
+    try {
+      // 💡 เปลี่ยนจากดึง env ตรงๆ มาใช้จากตัวแปรที่เราตั้งใน api.js
+      // โดยการเรียก api.defaults.baseURL 
+      const response = await fetch(`${api.defaults.baseURL}/`); 
+      
+      // ถ้าเข้าหน้า Root (/) ของ Render ได้ มันจะคืนค่า {"message": "..."}
+      const data = await response.json();
+      setStatus(` ${data.message || "Drowsiness Detection API is Ready for Production!"}`);
+    } catch (error) {
+      console.error("Health check failed:", error);
+      setStatus(" เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+    }
+  };
+  checkStatus();
+}, []);
 
   // 4. ฟังก์ชันออกจากระบบ 💡 [NEW PB-33] ต้องลบทั้ง token และ user
   const handleLogout = () => {
