@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // 1. สร้าง Instance พื้นฐาน (รองรับทั้ง Local และ Vercel)
-const API_URL = "https://se4ai-drowsiness-project.onrender.com";
+const API_URL = "https://se4ai-drowsiness-project.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_URL,
