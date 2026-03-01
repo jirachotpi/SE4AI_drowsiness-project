@@ -1,7 +1,8 @@
 // --- frontend/src/pages/SystemConfig.jsx ---
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { motion } from "framer-motion";
 
 function SystemConfig({ user, onLogout }) {
@@ -20,7 +21,8 @@ function SystemConfig({ user, onLogout }) {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await axios.get("http://127.0.0.1:8000/api/admin/config");
+        // 💡 ใช้ api.get แทน axios.get และตัด Base URL ออก
+        const res = await api.get("/admin/config");
         setConfig({
           ear_threshold: res.data.ear_threshold,
           drowsy_time: res.data.drowsy_time,
@@ -47,7 +49,8 @@ function SystemConfig({ user, onLogout }) {
     setMessage({ text: "", type: "" });
 
     try {
-      await axios.put("http://127.0.0.1:8000/api/admin/config", config);
+      // 💡 ใช้ api.put
+      await api.put("/admin/config", config);
       setMessage({ text: "บันทึกการตั้งค่าระบบ AI สำเร็จ", type: "success" });
       setTimeout(() => setMessage({ text: "", type: "" }), 3000);
     } catch (error) {

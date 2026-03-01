@@ -1,7 +1,8 @@
 // --- frontend/src/pages/Register.jsx ---
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 
 function Register() {
   // 1. เพิ่มฟิลด์ใหม่ใน State (department, phone, age, gender)
@@ -29,8 +30,8 @@ function Register() {
     setIsLoading(true);
     setErrorMsg("");
     try {
-      // ส่ง formData ทั้งหมดไปยัง Backend
-      const response = await axios.post("http://127.0.0.1:8000/api/register", formData);
+      // 💡 ใช้ api.post แทน axios.post และลบ Base URL ออก
+      const response = await api.post("/register", formData);
       alert("ลงทะเบียนสำเร็จ: " + response.data.message); 
       navigate("/login");
     } catch (error) {

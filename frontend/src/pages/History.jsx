@@ -1,6 +1,7 @@
 // --- frontend/src/pages/History.jsx ---
 import React, { useState, useEffect, useMemo } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { motion } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -27,7 +28,8 @@ function History({ user }) {
     const fetchHistory = async () => {
       try {
         setIsLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/api/logs?user_id=${user.username}`);
+        // 💡 ใช้ api.get แทน axios.get และตัด Base URL ทิ้ง
+        const res = await api.get(`/logs?user_id=${user.username}`);
         
         if (res.data && res.data.length > 0) {
             setLogs(res.data);

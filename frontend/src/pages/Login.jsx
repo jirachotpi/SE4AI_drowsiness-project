@@ -1,7 +1,8 @@
 // --- frontend/src/pages/Login.jsx ---
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+// 💡 เปลี่ยนจาก axios เป็น api ของเรา
+import api from "../api"; 
 
 function Login({ onLoginSuccess }) {
   const [formData, setFormData] = useState({ username: "", password: "" });
@@ -20,7 +21,8 @@ function Login({ onLoginSuccess }) {
     setIsLoading(true);
     setErrorMsg("");
     try {
-      const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
+      // 💡 ใช้ api.post และตัด Base URL ออก
+      const response = await api.post("/login", formData);
       
       // 💡 [NEW PB-33] การจัดการข้อมูลเมื่อ Login สำเร็จแบบ JWT
       if (response.data.status === "success") {

@@ -1,7 +1,8 @@
 // --- frontend/src/pages/UserManagement.jsx ---
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { motion } from "framer-motion";
 
 function UserManagement({ user, onLogout }) {
@@ -12,7 +13,8 @@ function UserManagement({ user, onLogout }) {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const res = await axios.get("http://127.0.0.1:8000/api/admin/users");
+      // 💡 ใช้ api.get แทน axios.get และตัด Base URL ออก
+      const res = await api.get("/admin/users");
       setUsers(res.data);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -28,7 +30,8 @@ function UserManagement({ user, onLogout }) {
   const handleToggleSuspend = async (userId, currentStatus) => {
     if (!window.confirm(`ต้องการ${currentStatus ? 'ปลดแบน' : 'ระงับ'}บัญชีนี้ใช่หรือไม่?`)) return;
     try {
-      await axios.put(`http://127.0.0.1:8000/api/admin/users/${userId}/suspend`, {
+      // 💡 ใช้ api.put
+      await api.put(`/admin/users/${userId}/suspend`, {
         is_suspended: !currentStatus
       });
       fetchUsers(); 
@@ -40,7 +43,8 @@ function UserManagement({ user, onLogout }) {
   const handleDelete = async (userId) => {
     if (!window.confirm("คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีนี้ถาวร? (ประวัติทั้งหมดจะถูกลบด้วย)")) return;
     try {
-      await axios.delete(`http://127.0.0.1:8000/api/admin/users/${userId}`);
+      // 💡 ใช้ api.delete
+      await api.delete(`/admin/users/${userId}`);
       fetchUsers(); 
     } catch (err) {
       alert("เกิดข้อผิดพลาดในการลบผู้ใช้งาน");

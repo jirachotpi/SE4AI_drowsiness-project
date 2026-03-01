@@ -1,6 +1,7 @@
 // --- frontend/src/pages/AdminAnalytics.jsx ---
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -13,7 +14,8 @@ function AdminAnalytics({ user, onLogout }) {
   const fetchChartData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://127.0.0.1:8000/api/admin/chart-data?period=${period}`);
+      // 💡 ใช้ api.get แทน axios.get และตัด Base URL ออก
+      const res = await api.get(`/admin/chart-data?period=${period}`);
       
       // 💡 [NEW] จัดการ Data ให้ชื่อ Key ตรงกัน ไม่ว่า Backend จะส่งอะไรมา
       const formattedData = res.data.map(item => ({
@@ -101,7 +103,9 @@ function AdminAnalytics({ user, onLogout }) {
 
         <div className="p-4 border-t border-slate-800 flex flex-col gap-3">
           <div className="flex items-center gap-3 px-4 py-2">
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white">{user?.username?.charAt(0).toUpperCase() || "A"}</div>
+            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-white">
+              {user?.username?.charAt(0).toUpperCase() || "A"}
+            </div>
             <div className="text-sm">
               <p className="font-bold text-white">{user?.username || "Admin"}</p>
               <p className="text-xs text-slate-500">Super Administrator</p>

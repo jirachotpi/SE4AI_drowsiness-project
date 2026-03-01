@@ -1,7 +1,7 @@
 // --- frontend/src/App.jsx ---
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import axios from 'axios';
+// 💡 ลบ import axios ออก เพราะเราไม่ได้ใช้แล้ว
 import api from './api'; // 💡 [NEW PB-33] นำเข้าตัวจัดการ API ที่มี Interceptor แนบ Token อัตโนมัติ
 
 // นำเข้า Components และ Pages
@@ -62,8 +62,15 @@ function App() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/');
-        setStatus(` ${res.data.message || "ระบบพร้อมใช้งาน"}`);
+        // 💡 ดึง Base URL จาก api.js (ซึ่งมันจะอ่านจาก .env ให้เองตอนขึ้น Vercel)
+        // เพื่อป้องกันการยิงไป localhost ตอนใช้งานจริง
+        const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+        
+        // ตรงนี้ใช้ fetch ก็ได้ครับ เพื่อเช็กแค่สถานะเซิร์ฟเวอร์
+        const response = await fetch(`${BASE_URL}/`);
+        const data = await response.json();
+        
+        setStatus(` ${data.message || "ระบบพร้อมใช้งาน"}`);
       } catch (error) {
         setStatus(" เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
       }

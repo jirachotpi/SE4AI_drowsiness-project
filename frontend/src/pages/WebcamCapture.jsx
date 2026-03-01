@@ -1,6 +1,7 @@
 // --- frontend/src/pages/WebcamCapture.jsx ---
 import React, { useRef, useState, useEffect } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { motion, AnimatePresence } from "framer-motion";
 
 function WebcamCapture({ user }) {
@@ -29,11 +30,10 @@ function WebcamCapture({ user }) {
   const [alertColor, setAlertColor] = useState("gray"); 
   const [debugInfo, setDebugInfo] = useState("");
 
-  // ระบบจับเวลา (Timer) 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  
-  // 💡 [NEW] State สำหรับนับจำนวน "เริ่มวูบ" สะสม
   const [sessionDrowsyCount, setSessionDrowsyCount] = useState(0);
+  
+  const [showDangerModal, setShowDangerModal] = useState(false);
 
   const warningAudioRef = useRef(null);
   const dangerAudioRef = useRef(null); 
@@ -47,13 +47,14 @@ function WebcamCapture({ user }) {
     lastBlinkTime: Date.now(),
     isPlayingDanger: false,
     isPlayingWarning: false,
-    hasCountedDrowsyThisTime: false // ป้องกันการนับเบิ้ลใน 1 ครั้งที่วูบ
+    hasCountedDrowsyThisTime: false
   });
   
   const latestEarRef = useRef(0.0);       
   const eventStartTimeRef = useRef(null); 
   const isLoggingRef = useRef(false);     
   const eventEarRef = useRef(0.0);
+  const currentEventCauseRef = useRef("drowsy");
 
   // ==========================================
   // 2. ฟังก์ชันหลักของระบบตรวจจับ
@@ -61,7 +62,8 @@ function WebcamCapture({ user }) {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await axios.get("http://127.0.0.1:8000/api/admin/config");
+        // 💡 เปลี่ยนมาใช้ api.get
+        const res = await api.get("/admin/config");
         setSysConfig(prev => ({
           ...prev,
           THRESH_MICROSLEEP: res.data.drowsy_time,
@@ -75,7 +77,6 @@ function WebcamCapture({ user }) {
     fetchConfig();
   }, []);
 
-  // Effect สำหรับจับเวลาแบบ Real-time
   useEffect(() => {
     let interval;
     if (isStreaming) {
@@ -88,7 +89,6 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming]);
 
-  // ฟังก์ชันแปลงวินาทีเป็น HH:MM:SS
   const formatTime = (totalSeconds) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
     const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -99,7 +99,8 @@ function WebcamCapture({ user }) {
   const saveLog = async (eventType, duration, ear) => {
     try {
       const username = user ? user.username : "Guest";
-      await axios.post("http://127.0.0.1:8000/api/logs", {
+      // 💡 เปลี่ยนมาใช้ api.post
+      await api.post("/logs", {
         user_id: username,
         event_type: eventType,
         ear_value: ear,        
@@ -133,10 +134,11 @@ function WebcamCapture({ user }) {
     eventStartTimeRef.current = null;
     isLoggingRef.current = false;
     latestEarRef.current = 0.0;
+    currentEventCauseRef.current = "drowsy";
 
-    // รีเซ็ตตัวเลขเมื่อกดทำงานใหม่
     setElapsedSeconds(0);
-    setSessionDrowsyCount(0); // รีเซ็ตการนับวูบ
+    setSessionDrowsyCount(0); 
+    setShowDangerModal(false);
 
     setStatusText("ระบบพร้อมทำงาน...");
     setAlertColor("green");
@@ -206,7 +208,8 @@ function WebcamCapture({ user }) {
       formData.append("file", blob, "frame.jpg");
 
       try {
-        const res = await axios.post("http://127.0.0.1:8000/api/detect", formData);
+        // 💡 เปลี่ยนมาใช้ api.post
+        const res = await api.post("/detect", formData);
         const data = res.data;
         drawOverlay(data.face_box, data.ear);
         analyzeFatigue(data);
@@ -235,6 +238,8 @@ function WebcamCapture({ user }) {
         state.drowsyEventCount = 0;
     }
 
+    let openDuration = 0; // 💡 [NEW] ประกาศตัวแปรเก็บเวลาลืมตา
+
     if (data.is_eye_closed) {
         state.consecutiveClosedFrames += 1;
         state.consecutiveOpenFrames = 0;
@@ -242,43 +247,66 @@ function WebcamCapture({ user }) {
         
         const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
         
-        // 💡 นับอาการวูบ และแจ้งเตือนเมื่อครบ 5 ครั้ง
         if (closedDuration >= sysConfig.THRESH_MICROSLEEP && !state.hasCountedDrowsyThisTime) {
-            state.hasCountedDrowsyThisTime = true; // ล็อคไว้ไม่ให้นับซ้ำในเฟรมถัดไปจนกว่าจะลืมตา
+            state.hasCountedDrowsyThisTime = true; 
             state.drowsyEventCount += 1;
             state.lastDrowsyEventTime = NOW;
 
             setSessionDrowsyCount(prev => {
                 const newCount = prev + 1;
-                // ถ้าครบ 5 ครั้ง ให้เด้ง Alert
-                if (newCount > 0 && newCount % 5 === 0) {
-                    setTimeout(() => {
-                        alert(`⚠️ คำเตือนอันตราย: ตรวจพบอาการ 'เริ่มวูบ' สะสมถึง ${newCount} ครั้งแล้ว! กรุณาจอดพักรถทันทีเพื่อความปลอดภัย`);
-                    }, 200);
+                if (newCount >= sysConfig.THRESH_FREQ_COUNT) {
+                    setShowDangerModal(true); 
+                    handleSound("danger"); 
+                    return 0; 
                 }
                 return newCount;
             });
         }
     } else {
         state.consecutiveOpenFrames += 1;
-        const openDuration = state.consecutiveOpenFrames * (sysConfig.INTERVAL_MS / 1000);
+        openDuration = state.consecutiveOpenFrames * (sysConfig.INTERVAL_MS / 1000);
+        
+        // 💡 [UPDATE] เช็กว่าลืมตาครบ 3 วิ (RECOVERY_TIME) หรือยัง
         if (openDuration >= sysConfig.RECOVERY_TIME) {
             state.drowsyEventCount = 0;
+            // ถ้าระบบขึ้น Modal อยู่ ให้ทำการปิดอัตโนมัติเมื่อลืมตาครบ
+            if (showDangerModal) {
+                setShowDangerModal(false);
+            }
         }
         state.consecutiveClosedFrames = 0;
-        state.hasCountedDrowsyThisTime = false; // ปลดล็อคเมื่อลืมตา
+        state.hasCountedDrowsyThisTime = false; 
     }
 
     const currentClosedSeconds = (state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000));
     const stareSeconds = ((NOW - state.lastBlinkTime) / 1000);
     
+    // 💡 [UPDATE] ถ้ามี Modal สีแดงขึ้นอยู่ ให้ค้างสถานะสีแดง และแสดงเวลาลืมตาที่เหลือเพื่อปลดล็อก!
+    if (showDangerModal) {
+        setAlertColor("red");
+        const remainingToWake = Math.max(0, sysConfig.RECOVERY_TIME - openDuration).toFixed(1);
+        setStatusText(`ลืมตาอีก ${remainingToWake}s เพื่อยกเลิก`);
+        setDebugInfo(`EAR: ${data.ear} | Stare: ${stareSeconds.toFixed(1)}s`);
+        return; // บังคับไม่ให้โค้ดข้างล่างเปลี่ยนสีจนกว่า Modal จะหายไป
+    }
+
     if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP || 
         stareSeconds >= sysConfig.THRESH_STARING || 
         state.drowsyEventCount >= sysConfig.THRESH_FREQ_COUNT) {
+        
+        if (stareSeconds >= sysConfig.THRESH_STARING) {
+            currentEventCauseRef.current = "staring"; 
+        } else if (currentClosedSeconds >= sysConfig.THRESH_DEEP_SLEEP) {
+            currentEventCauseRef.current = "deep_sleep"; 
+        } else {
+            currentEventCauseRef.current = "drowsy";
+        }
+
         setAlertColor("red");
         setStatusText("อันตราย! พักเดี๋ยวนี้");
         handleSound("danger"); 
     } else if (currentClosedSeconds >= sysConfig.THRESH_MICROSLEEP) {
+        currentEventCauseRef.current = "drowsy"; 
         setAlertColor("orange");
         setStatusText(`ระวัง! เริ่มวูบ (${currentClosedSeconds.toFixed(1)}s)`);
         handleSound("warning"); 
@@ -304,13 +332,12 @@ function WebcamCapture({ user }) {
     canvasRef.current.height = video.videoHeight;
     
     if (box) {
-        let color = "#10b981"; // green
-        if (alertColor === "red") color = "#e11d48";
+        let color = "#10b981"; 
+        if (alertColor === "red" || showDangerModal) color = "#e11d48";
         else if (alertColor === "orange") color = "#f97316";
         else if (alertColor === "yellow") color = "#fbbf24";
         else if (alertColor === "gray") color = "#94a3b8";
 
-        // 💡 แก้กรอบกลับหัว (Mirror Fix): คำนวณแกน X ให้สลับซ้าย-ขวา
         const canvasWidth = canvasRef.current.width;
         const boxWidth = box[2];
         const flippedX = canvasWidth - box[0] - boxWidth;
@@ -336,11 +363,8 @@ function WebcamCapture({ user }) {
       interval = setInterval(captureAndDetect, sysConfig.INTERVAL_MS);
     }
     return () => clearInterval(interval);
-  }, [isStreaming, alertColor, isMuted, sysConfig]);
+  }, [isStreaming, alertColor, isMuted, sysConfig, showDangerModal]);
 
-  // ==========================================
-  // 💡 [NEW] อัปเดต Effect นี้เพื่อให้บันทึกสถานะ 'staring' ลง Database ได้ถูกต้อง
-  // ==========================================
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
@@ -354,22 +378,14 @@ function WebcamCapture({ user }) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
         
-        // คำนวณเวลาจ้องมอง เพื่อจำแนก eventType ให้ Backend
-        let finalType = "drowsy";
-        const currentStareSeconds = (Date.now() - logicState.current.lastBlinkTime) / 1000;
-
-        if (currentStareSeconds >= sysConfig.THRESH_STARING) {
-            finalType = "staring";
-        } else if (duration > 2000) {
-            finalType = "deep_sleep";
-        }
-
+        const finalType = currentEventCauseRef.current; 
+        
         saveLog(finalType, duration, eventEarRef.current);
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
       }
     }
-  }, [alertColor, sysConfig.THRESH_STARING]); // เพิ่ม Dependency เพื่อกันบั๊ก
+  }, [alertColor]);
 
   const toggleCamera = () => {
     if (!isStreaming) {
@@ -397,7 +413,7 @@ function WebcamCapture({ user }) {
   };
 
   // ==========================================
-  // 3. จัดการสไตล์ UI ตามสถานะ (Theme Light)
+  // 3. จัดการสไตล์ UI ตามสถานะ 
   // ==========================================
   const getStatusConfig = () => {
     switch (alertColor) {
@@ -451,8 +467,50 @@ function WebcamCapture({ user }) {
   const stats = getParsedStats();
 
   return (
-    <div className="w-full flex justify-center font-sans mt-8">
+    <div className="w-full flex justify-center font-sans mt-8 relative">
       
+      {/* 💡 [UPDATE] ลบปุ่มปิดทิ้ง เปลี่ยนเป็นข้อความให้ลืมตาค้างไว้ */}
+      <AnimatePresence>
+        {showDangerModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} 
+              animate={{ scale: 1, y: 0 }} 
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border-4 border-rose-500 flex flex-col items-center text-center"
+            >
+              <div className="w-24 h-24 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-6 shadow-inner animate-[pulse_0.5s_ease-in-out_infinite]">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-12 h-12">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-black text-rose-600 mb-2 uppercase tracking-wide">คำเตือนอันตราย!</h2>
+              <p className="text-gray-600 font-medium mb-6 text-[15px] leading-relaxed">
+                ระบบตรวจพบอาการ <strong className="text-gray-900">เริ่มวูบสะสมถึง {sysConfig.THRESH_FREQ_COUNT} ครั้ง</strong><br/>
+                มีความเสี่ยงสูงมากที่จะหลับใน<br/>
+                <strong className="text-rose-600">กรุณาจอดพักรถทันที</strong>
+              </p>
+              
+              <div className="w-full bg-rose-50 border border-rose-200 rounded-xl py-4 flex flex-col items-center justify-center">
+                 <p className="text-rose-700 font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 animate-bounce">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    </svg>
+                    กรุณาลืมตาค้างไว้ 3 วินาที
+                 </p>
+                 <span className="text-sm text-rose-500 font-medium mt-1">เพื่อยกเลิกการแจ้งเตือนแบบ Hands-free</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Container หลัก */}
       <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 px-4">
         
@@ -491,7 +549,6 @@ function WebcamCapture({ user }) {
               muted 
               className={`absolute inset-0 w-full h-full object-cover -scale-x-100 ${!isStreaming ? 'hidden' : ''}`}
             />
-            {/* 💡 ปลด CSS -scale-x-100 ออกจาก Canvas เพื่อให้ตัวอักษรไม่กลับด้าน และขยับตาม Logic ที่ตั้งไว้ */}
             <canvas 
               ref={canvasRef} 
               className={`absolute inset-0 w-full h-full object-cover pointer-events-none z-0 ${!isStreaming ? 'hidden' : ''}`}
@@ -597,13 +654,16 @@ function WebcamCapture({ user }) {
                   </div>
                 </div>
 
-                {/* 2. 💡 จำนวนเริ่มวูบสะสม (เตือนเมื่อครบ 5) */}
+                {/* 2. จำนวนเริ่มวูบสะสม */}
                 <div className="bg-amber-50/30 p-4 rounded-2xl border border-amber-100 flex justify-between items-center text-sm">
                     <span className="text-amber-600 font-bold flex items-center gap-1.5">
-                      ⚠️ จำนวนเริ่มวูบสะสม
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-amber-500">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" />
+                      </svg>
+                      เริ่มวูบสะสม
                     </span>
                     <span className="text-amber-800 font-mono font-black bg-white px-2 py-1 rounded-lg border border-amber-200 shadow-sm">
-                      {isStreaming ? sessionDrowsyCount : "-"} / 5
+                      {isStreaming ? sessionDrowsyCount : "-"} / {sysConfig.THRESH_FREQ_COUNT}
                     </span>
                 </div>
 

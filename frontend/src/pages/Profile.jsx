@@ -1,6 +1,7 @@
 // --- frontend/src/pages/Profile.jsx ---
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { motion } from "framer-motion";
 
 function Profile({ user }) {
@@ -32,7 +33,8 @@ function Profile({ user }) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/users/me?username=${user.username}`);
+        // 💡 ใช้ api.get แทน axios.get และตัด Base URL ทิ้ง
+        const res = await api.get(`/users/me?username=${user.username}`);
         setProfileData(res.data);
         // 💡 [NEW] เซ็ตค่าเริ่มต้นฟอร์มจากข้อมูลที่ดึงมา
         setFormData({ 
@@ -85,12 +87,14 @@ function Profile({ user }) {
         new_password: formData.newPassword || null
       };
 
-      const res = await axios.put("http://127.0.0.1:8000/api/users/me", payload);
+      // 💡 ใช้ api.put
+      const res = await api.put("/users/me", payload);
       
       setMessage({ text: res.data.message || "บันทึกข้อมูลเรียบร้อยแล้ว", type: "success" });
       setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "" }));
       
-      const updatedRes = await axios.get(`http://127.0.0.1:8000/api/users/me?username=${user.username}`);
+      // 💡 ใช้ api.get เพื่อดึงข้อมูลมาอัปเดต
+      const updatedRes = await api.get(`/users/me?username=${user.username}`);
       setProfileData(updatedRes.data);
       
       setTimeout(() => setMessage({ text: "", type: "" }), 3000);

@@ -1,6 +1,7 @@
 // --- frontend/src/pages/AdminDashboard.jsx ---
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -16,9 +17,10 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchData = async () => {
     try {
+      // 💡 ใช้ api.get แทน axios.get และตัด Base URL ออก
       const [logsRes, statsRes] = await Promise.all([
-        axios.get("http://127.0.0.1:8000/api/logs"),
-        axios.get("http://127.0.0.1:8000/api/admin/stats")
+        api.get("/logs"),
+        api.get("/admin/stats")
       ]);
       setLogs(logsRes.data);
       setStats(statsRes.data);
@@ -213,23 +215,23 @@ function AdminDashboard({ user, onLogout }) {
                
                {/* Pagination Controls */}
                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-sm text-slate-500">
-                  <span>แสดงหน้า {currentPage} จาก {totalPages} (ทั้งหมด {filteredLogs.length} รายการ)</span>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={handlePrevPage} 
-                      disabled={currentPage === 1}
-                      className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ก่อนหน้า
-                    </button>
-                    <button 
-                      onClick={handleNextPage} 
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ถัดไป
-                    </button>
-                  </div>
+                 <span>แสดงหน้า {currentPage} จาก {totalPages} (ทั้งหมด {filteredLogs.length} รายการ)</span>
+                 <div className="flex items-center gap-2">
+                   <button 
+                     onClick={handlePrevPage} 
+                     disabled={currentPage === 1}
+                     className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     ก่อนหน้า
+                   </button>
+                   <button 
+                     onClick={handleNextPage} 
+                     disabled={currentPage === totalPages}
+                     className="px-3 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     ถัดไป
+                   </button>
+                 </div>
                </div>
 
             </div>

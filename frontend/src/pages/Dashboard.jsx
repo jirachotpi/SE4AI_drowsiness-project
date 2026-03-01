@@ -1,6 +1,7 @@
 // --- frontend/src/pages/Dashboard.jsx ---
 import React, { useState, useEffect, useMemo } from "react";
-import axios from "axios";
+// 💡 เปลี่ยนจากการใช้ axios ปกติ มาเป็นตัวจัดการ api ของเรา
+import api from "../api"; 
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from "recharts";
@@ -21,7 +22,8 @@ function Dashboard({ user }) {
       
       try {
         setLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/api/logs/stats?user_id=${user.username}&period=${period}&m=${selectedMonth}&y=${currentYear}`);
+        // 💡 ใช้ api.get แทน axios.get และตัด Base URL ออก
+        const res = await api.get(`/logs/stats?user_id=${user.username}&period=${period}&m=${selectedMonth}&y=${currentYear}`);
         setChartData(res.data);
       } catch (err) {
         console.error("ไม่สามารถดึงข้อมูลสถิติได้:", err);
