@@ -27,3 +27,5 @@ matplotlib==3.8.2
 pandas==2.2.0
 absl-py==2.1.0
 attrs==23.2.0
+
+PyJWT==2.8.0
