@@ -7,6 +7,19 @@ function Navbar({ user, onLogout, status }) {
     return null; 
   }
 
+  // 💡 [ส่วนที่เพิ่มมา] ระบบเช็กข้อความสถานะ เพื่อกำหนดสี
+  const isError = status?.includes("เชื่อมต่อไม่ได้") || status?.includes("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+  const isLoading = status?.includes("กำลังตรวจสอบ");
+
+  // 💡 [ส่วนที่เพิ่มมา] กำหนดคลาสสีของกรอบข้อความและจุดไฟ
+  const statusBg = isError ? "bg-red-50 text-red-700 border-red-200" 
+                 : isLoading ? "bg-amber-50 text-amber-700 border-amber-200" 
+                 : "bg-emerald-50 text-emerald-700 border-emerald-200";
+                 
+  const dotColor = isError ? "bg-red-500" 
+                 : isLoading ? "bg-amber-500 animate-pulse" 
+                 : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]";
+
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -14,18 +27,21 @@ function Navbar({ user, onLogout, status }) {
           
           {/* ส่วนโลโก้และสถานะระบบ */}
           <div className="flex items-center gap-4">
-            {/* 💡 เปลี่ยน Link ให้ชี้ไปที่ /camera แทน /dashboard ตาม Flow ใหม่ */}
+            {/* โลโก้เดิมของคุณ (ไม่ได้แก้ไข) */}
             <Link to={user ? "/camera" : "/"} className="text-xl font-bold text-slate-900 tracking-tight text-decoration-none">
               Drowsiness<span className="text-blue-600">AI</span>
             </Link>
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
-              status?.includes("✅") ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-            }`}>
-              {status ? status.replace('✅ ', '') : "System Online"}
-            </span>
+            
+            {/* 💡 [ส่วนที่แก้ไข] ป้ายสถานะแบบใหม่ มีจุดไฟและเปลี่ยนสีตามคำ */}
+            <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full font-medium border transition-colors duration-300 ${statusBg}`}>
+              <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+              <span className="truncate max-w-[200px] md:max-w-none">
+                {status || "System Online"}
+              </span>
+            </div>
           </div>
 
-          {/* ส่วนเมนูด้านขวา */}
+          {/* ส่วนเมนูด้านขวา (คงเดิม 100%) */}
           <div className="hidden md:flex items-center gap-6">
             {!user ? (
               <>
@@ -40,7 +56,7 @@ function Navbar({ user, onLogout, status }) {
                   สวัสดี, {user.username}
                 </span>
                 
-                {/* 💡 [NEW] จัดเรียงและเปลี่ยนชื่อเมนูตาม PB-30 */}
+                {/* จัดเรียงและเปลี่ยนชื่อเมนูตาม PB-30 */}
                 <Link to="/camera" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">กล้อง</Link>
                 <Link to="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">กราฟวิเคราะห์</Link>
                 <Link to="/history" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">สถิติการใช้งาน</Link>
