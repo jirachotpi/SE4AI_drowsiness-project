@@ -2,10 +2,10 @@
 import axios from 'axios';
 
 // 1. สร้าง Instance พื้นฐาน (รองรับทั้ง Local และ Vercel)
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_URL = "https://se4ai-drowsiness-project.onrender.com";
 
 const api = axios.create({
-  baseURL: `${BASE_URL}/api`, 
+  baseURL: API_URL,
 });
 
 // 2. Interceptor ขาไป (Request): ก่อนส่งคำขอทุกครั้ง ให้ดึง Token มาแปะ Header
