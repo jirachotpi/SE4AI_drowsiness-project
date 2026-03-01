@@ -32,7 +32,7 @@ function WebcamCapture({ user }) {
   // ระบบจับเวลา (Timer) 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   
-  // 💡 [NEW] State สำหรับนับจำนวน "เริ่มวูบ" สะสม แทนการกะพริบตา
+  // 💡 [NEW] State สำหรับนับจำนวน "เริ่มวูบ" สะสม
   const [sessionDrowsyCount, setSessionDrowsyCount] = useState(0);
 
   const warningAudioRef = useRef(null);
@@ -242,7 +242,7 @@ function WebcamCapture({ user }) {
         
         const closedDuration = state.consecutiveClosedFrames * (sysConfig.INTERVAL_MS / 1000);
         
-        // 💡 [NEW] นับอาการวูบ และแจ้งเตือนเมื่อครบ 5 ครั้ง
+        // 💡 นับอาการวูบ และแจ้งเตือนเมื่อครบ 5 ครั้ง
         if (closedDuration >= sysConfig.THRESH_MICROSLEEP && !state.hasCountedDrowsyThisTime) {
             state.hasCountedDrowsyThisTime = true; // ล็อคไว้ไม่ให้นับซ้ำในเฟรมถัดไปจนกว่าจะลืมตา
             state.drowsyEventCount += 1;
@@ -310,7 +310,7 @@ function WebcamCapture({ user }) {
         else if (alertColor === "yellow") color = "#fbbf24";
         else if (alertColor === "gray") color = "#94a3b8";
 
-        // 💡 [NEW] แก้กรอบกลับหัว (Mirror Fix): คำนวณแกน X ให้สลับซ้าย-ขวา เพื่อให้ตรงกับ Video ที่ตั้งค่า ScaleX(-1) ไว้
+        // 💡 แก้กรอบกลับหัว (Mirror Fix): คำนวณแกน X ให้สลับซ้าย-ขวา
         const canvasWidth = canvasRef.current.width;
         const boxWidth = box[2];
         const flippedX = canvasWidth - box[0] - boxWidth;
@@ -338,6 +338,9 @@ function WebcamCapture({ user }) {
     return () => clearInterval(interval);
   }, [isStreaming, alertColor, isMuted, sysConfig]);
 
+  // ==========================================
+  // 💡 [NEW] อัปเดต Effect นี้เพื่อให้บันทึกสถานะ 'staring' ลง Database ได้ถูกต้อง
+  // ==========================================
   useEffect(() => {
     if (alertColor === "red" || alertColor === "orange") {
       if (!eventStartTimeRef.current) {
@@ -350,13 +353,23 @@ function WebcamCapture({ user }) {
       if (isLoggingRef.current && eventStartTimeRef.current) {
         const endTime = Date.now();
         const duration = endTime - eventStartTimeRef.current; 
-        const finalType = duration > 2000 ? "deep_sleep" : "drowsy";
+        
+        // คำนวณเวลาจ้องมอง เพื่อจำแนก eventType ให้ Backend
+        let finalType = "drowsy";
+        const currentStareSeconds = (Date.now() - logicState.current.lastBlinkTime) / 1000;
+
+        if (currentStareSeconds >= sysConfig.THRESH_STARING) {
+            finalType = "staring";
+        } else if (duration > 2000) {
+            finalType = "deep_sleep";
+        }
+
         saveLog(finalType, duration, eventEarRef.current);
         eventStartTimeRef.current = null;
         isLoggingRef.current = false;
       }
     }
-  }, [alertColor]);
+  }, [alertColor, sysConfig.THRESH_STARING]); // เพิ่ม Dependency เพื่อกันบั๊ก
 
   const toggleCamera = () => {
     if (!isStreaming) {
@@ -478,7 +491,7 @@ function WebcamCapture({ user }) {
               muted 
               className={`absolute inset-0 w-full h-full object-cover -scale-x-100 ${!isStreaming ? 'hidden' : ''}`}
             />
-            {/* 💡 [NEW] ปลด CSS -scale-x-100 ออกจาก Canvas เพื่อให้ตัวอักษรไม่กลับด้าน และขยับตาม Logic ที่ตั้งไว้ */}
+            {/* 💡 ปลด CSS -scale-x-100 ออกจาก Canvas เพื่อให้ตัวอักษรไม่กลับด้าน และขยับตาม Logic ที่ตั้งไว้ */}
             <canvas 
               ref={canvasRef} 
               className={`absolute inset-0 w-full h-full object-cover pointer-events-none z-0 ${!isStreaming ? 'hidden' : ''}`}
@@ -584,7 +597,7 @@ function WebcamCapture({ user }) {
                   </div>
                 </div>
 
-                {/* 2. 💡 [NEW] จำนวนเริ่มวูบสะสม (เตือนเมื่อครบ 5) */}
+                {/* 2. 💡 จำนวนเริ่มวูบสะสม (เตือนเมื่อครบ 5) */}
                 <div className="bg-amber-50/30 p-4 rounded-2xl border border-amber-100 flex justify-between items-center text-sm">
                     <span className="text-amber-600 font-bold flex items-center gap-1.5">
                       ⚠️ จำนวนเริ่มวูบสะสม
