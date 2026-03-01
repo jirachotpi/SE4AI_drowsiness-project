@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
+import api from './api'; // 💡 [NEW PB-33] นำเข้าตัวจัดการ API ที่มี Interceptor แนบ Token อัตโนมัติ
 
 // นำเข้า Components และ Pages
 import Navbar from './components/Navbar';
@@ -16,20 +17,48 @@ import SystemConfig from './pages/SystemConfig';
 import Profile from './pages/Profile'; 
 import History from './pages/History'; 
 import Dashboard from './pages/Dashboard'; 
-
-// นำเข้าหน้า AdminAnalytics ที่เพิ่งสร้างใหม่
 import AdminAnalytics from './pages/AdminAnalytics'; 
 
 function App() {
-  // 1. [BEST PRACTICE] ใช้ Lazy Initialization ดึงข้อมูลจาก LocalStorage ทันที
+  // 1. ดึงข้อมูลเบื้องต้นจาก LocalStorage (เปลี่ยน Key เป็น 'user' ตามหน้า Login ใหม่)
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('drowsiness_user');
+    const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
   
   const [status, setStatus] = useState("กำลังตรวจสอบ...");
+  
+  // 💡 [NEW PB-33] State สำหรับรอตรวจสอบ Token กับ Backend ป้องกันการเด้งไปหน้า Login มั่วๆ
+  const [isVerifying, setIsVerifying] = useState(true);
 
-  // 2. useEffect เหลือแค่ทำหน้าที่เช็กสถานะ Backend อย่างเดียว
+  // 2. useEffect สำหรับเช็ก Token (JWT) เมื่อผู้ใช้เปิดเว็บหรือรีเฟรชหน้า
+  useEffect(() => {
+    const verifyToken = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // ยิง API ไปเช็กตัวตน มันจะแนบ Token ไปให้อัตโนมัติโดย api.js
+          const res = await api.get('/users/me'); 
+          // ถ้าสำเร็จ อัปเดตข้อมูลผู้ใช้ให้สดใหม่เสมอ
+          const verifiedUser = { username: res.data.username, role: res.data.role };
+          setUser(verifiedUser);
+          localStorage.setItem('user', JSON.stringify(verifiedUser));
+        } catch (error) {
+          console.warn("Token หมดอายุหรือไม่ถูกต้อง บังคับออกจากระบบ");
+          setUser(null);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+      } else {
+        setUser(null);
+      }
+      setIsVerifying(false); // ตรวจสอบเสร็จสิ้น
+    };
+
+    verifyToken();
+  }, []);
+
+  // 3. useEffect เช็กสถานะ Backend (Health Check)
   useEffect(() => {
     const checkStatus = async () => {
       try {
@@ -42,10 +71,25 @@ function App() {
     checkStatus();
   }, []);
 
+  // 4. ฟังก์ชันออกจากระบบ 💡 [NEW PB-33] ต้องลบทั้ง token และ user
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('drowsiness_user'); // ล้างข้อมูลตอนกดออกจากระบบ
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login'; // บังคับรีเฟรชเพื่อเคลียร์ State ทั้งหมด
   };
+
+  // 💡 [NEW PB-33] ระหว่างรอเช็ก Token ให้แสดงหน้า Loading
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-slate-500 font-medium">กำลังตรวจสอบสิทธิ์การเข้าใช้งาน...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Router>
@@ -54,12 +98,12 @@ function App() {
         {/* แถบเมนูด้านบน */}
         <Navbar user={user} onLogout={handleLogout} status={status} />
         
-        {/* พื้นที่แสดงผลหน้าต่างๆ 💡 [NEW] เพิ่ม pb-30 ตรงนี้เพื่อให้มีระยะห่างด้านล่างในทุกๆ หน้า */}
+        {/* พื้นที่แสดงผลหน้าต่างๆ */}
         <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-30">
           <Routes>
             <Route path="/" element={<Welcome />} />
             
-            {/* 💡 [NEW] ระบบล็อกอิน/สมัครสมาชิก: ถ้าเป็น User ไปหน้า /camera ถ้าเป็น Admin ไป /dashboard */}
+            {/* ระบบล็อกอิน/สมัครสมาชิก: ถ้าเป็น User ไปหน้า /camera ถ้าเป็น Admin ไป /dashboard */}
             <Route path="/login" element={
               user ? <Navigate to={user.role === 'admin' ? "/dashboard" : "/camera"} /> : <Login onLoginSuccess={setUser} />
             } />

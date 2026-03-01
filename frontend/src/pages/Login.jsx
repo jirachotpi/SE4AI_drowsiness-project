@@ -8,7 +8,6 @@ function Login({ onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   
-  // 💡 อย่าลืมเรียกใช้ useNavigate
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -22,14 +21,29 @@ function Login({ onLoginSuccess }) {
     setErrorMsg("");
     try {
       const response = await axios.post("http://127.0.0.1:8000/api/login", formData);
-      localStorage.setItem("drowsiness_user", JSON.stringify(response.data));
-      onLoginSuccess(response.data);
       
-      // 💡 [NEW] ตรวจสอบ Role เพื่อพาไปหน้าที่ถูกต้อง
-      if (response.data.role === "admin") {
-        navigate("/dashboard"); // ถ้าเป็นแอดมิน ไปหน้าแดชบอร์ด
-      } else {
-        navigate("/camera"); // ถ้าเป็นคนขับรถ (user) ไปหน้ากล้อง
+      // 💡 [NEW PB-33] การจัดการข้อมูลเมื่อ Login สำเร็จแบบ JWT
+      if (response.data.status === "success") {
+        
+        // 1. เก็บ JWT Token ไว้ใช้ยืนยันตัวตนกับ API อื่นๆ
+        localStorage.setItem("token", response.data.access_token);
+        
+        // 2. เก็บข้อมูล User เบื้องต้น (Role, Username)
+        const userData = { 
+          username: response.data.username, 
+          role: response.data.role 
+        };
+        localStorage.setItem("user", JSON.stringify(userData));
+        
+        // 3. แจ้ง App.jsx ว่าเข้าสู่ระบบสำเร็จ
+        onLoginSuccess(userData);
+        
+        // 4. ตรวจสอบ Role เพื่อพาไปหน้าที่ถูกต้อง
+        if (response.data.role === "admin") {
+          navigate("/dashboard"); // ถ้าเป็นแอดมิน ไปหน้าแดชบอร์ด
+        } else {
+          navigate("/camera"); // ถ้าเป็นคนขับรถ ไปหน้ากล้อง
+        }
       }
 
     } catch (error) {
