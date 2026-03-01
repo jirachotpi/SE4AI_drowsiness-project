@@ -1,0 +1,23 @@
+# --- OS & IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Backend (Python) ---
+backend/venv/
+backend/.env
+backend/__pycache__/
+backend/*.py[cod]
+
+# --- Frontend (React/Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/*.local
+frontend/npm-debug.log*
+
+# --- Root Level ---
+.env
+venv/
+node_modules/
